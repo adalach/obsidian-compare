@@ -3,7 +3,7 @@
 	"name": "Compare",
 	"version": "1.2.0",
 	"minAppVersion": "1.7.2",
-	"description": "Compare two notes or LaTeX files side by side: changed lines and words are highlighted in the editor, matching text sits level, and each change can be copied to the other note.",
+	"description": "Highlight the differences between two notes or LaTeX files side by side, keep matching text level, and copy each change to the other note.",
 	"author": "Agata Dalach",
 	"authorUrl": "https://github.com/adalach",
 	"isDesktopOnly": false

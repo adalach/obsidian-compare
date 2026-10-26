@@ -20,6 +20,7 @@ export function opensInEditor(app: App, file: TAbstractFile | null | undefined):
 	return viewRegistry?.getTypeByExtension?.(file.extension) === "markdown";
 }
 
+/** Every file that opens in the editor, for the note picker (file names only; no file is read). */
 export function getEditorFiles(app: App) {
 	return app.vault.getFiles().filter((file) => opensInEditor(app, file));
 }
