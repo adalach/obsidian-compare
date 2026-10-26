@@ -2,7 +2,7 @@
 
 Compare two notes side by side, right in the editor. Changed lines and the changed words are highlighted in both notes while you keep writing, matching text sits level in both notes, and both notes scroll together. Cmd+click a difference, or a single changed word, to copy it to the other note. LaTeX files are matched by their `\section{…}` commands.
 
-![Compare highlighting the differences between two notes](assets/markdowncompare-preview.webp)
+![Comparing two notes: marked words, gaps that keep matching text level, Cmd+click to copy a change, and live updates](assets/compare-demo.webp)
 
 ## Start a comparison
 

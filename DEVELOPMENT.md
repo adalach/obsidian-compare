@@ -28,6 +28,10 @@ Each difference (`DiffHunk`) is a block of consecutive differing lines with its 
 
 The plugin uses no Node or Electron APIs and makes no network requests, so `isDesktopOnly` is `false`.
 
+## README demo
+
+`assets/compare-demo.webp` (animated WebP, 1600 px, 15 fps, 41 s) is edited from a screen recording with `temp/demo-render.py` (git-ignored, like `temp/` in general): `python3 -I temp/demo-render.py <recording> <out dir> preview <seconds…>` renders single frames with a grid for placing the notes, and `full` renders `demo.mp4` (30 fps) and the frames for `img2webp -loop 0 -lossy -q 50 -m 6 -d 67`. Its segment list sets the cuts, speeds and zoom (the two notes at 1.45×, the whole window, or the status bar's live updates button at 3.3×); its note list sets the handwritten notes.
+
 ## Release
 
 1. `npm version <x.y.z>` sets the version in `package.json`, `manifest.json` and `versions.json` (through `version-bump.mjs`), commits, and tags the commit `x.y.z` without a `v`.
