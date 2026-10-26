@@ -25,7 +25,7 @@ A comparison stays with its two tabs. You can open other notes, split panes or u
 
 ## Copy a difference to the other note
 
-- **Cmd+click** (Ctrl+click on Windows and Linux) a highlighted line to copy its whole difference to the other note, so both notes read the same there. On a link, Cmd+click still opens the link; click beside it instead.
+- **Cmd+click** (Ctrl+click on Windows and Linux) a highlighted line to copy its whole difference to the other note, so both notes read the same there. On a link, Cmd+click still opens the link; click beside it instead. Cmd+click on a framed table, callout or embed copies its difference too.
 - **Right-click** a highlighted line and choose **Copy to *other note*** or **Use *other note*'s version**. For lines only one note has, the second item deletes them.
 - **Compare: Copy difference to the other note** and **Compare: Use the other note's version** do the same for the difference at the cursor, so you can give them hotkeys.
 
@@ -45,7 +45,7 @@ Any file that Obsidian opens in its editor can be compared, for example `.tex` f
 
 ## Good to know
 
-- Highlights show in Source mode and Live Preview. Reading view is not highlighted. In Live Preview, Obsidian draws tables, callouts and embeds as one block, so their lines are not coloured; switch to Source mode to see them, and the panel lists them either way.
+- Highlights show in Source mode and Live Preview. Reading view is not highlighted. In Live Preview, a table, callout or embed that is part of a difference gets a coloured frame, since Obsidian draws it as one block in place of its lines.
 - The plugin changes a note only when you copy a difference into it. That is an ordinary edit, saved like typing. Highlights disappear when the comparison ends.
 - It makes no network requests.
 

@@ -1,8 +1,9 @@
 import type { EditorView as CodeMirrorEditorView } from "@codemirror/view";
 import { Decoration, EditorView } from "@codemirror/view";
-import type { Text } from "@codemirror/state";
+import type { EditorState, Text } from "@codemirror/state";
 import { RangeSetBuilder, StateEffect, StateField } from "@codemirror/state";
 import type { MarkdownView } from "obsidian";
+import { blockHighlightPlugin } from "./blockHighlight";
 
 export interface DiffLineDecoration {
 	line: number;
@@ -130,7 +131,17 @@ const jumpLinesField = StateField.define({
 	provide: (field) => EditorView.decorations.from(field),
 });
 
-export const diffHighlightExtension = [diffDecorationsField, jumpLinesField];
+export const diffHighlightExtension = [diffDecorationsField, jumpLinesField, blockHighlightPlugin];
+
+/** The classes of the line highlights on lines starting between `from` and `to`. */
+export function diffLineClassesBetween(state: EditorState, from: number, to: number) {
+	const classes = new Set<string>();
+	state.field(diffDecorationsField, false)?.between(from, to, (_from, _to, decoration) => {
+		const spec = decoration.spec as { attributes?: { class?: string } };
+		if (spec.attributes?.class) classes.add(spec.attributes.class);
+	});
+	return classes;
+}
 
 export function getEditorViewFromMarkdownView(view: MarkdownView) {
 	const cm = (view.editor as unknown as { cm?: unknown }).cm;

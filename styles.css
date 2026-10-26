@@ -155,3 +155,25 @@
 	color: var(--text-faint);
 	font-size: var(--font-ui-smaller);
 }
+
+/* Tables, callouts and embeds drawn in place of highlighted lines (Live Preview) */
+.markdown-source-view .markdowncompare-block-removed,
+.markdown-source-view .markdowncompare-block-added,
+.markdown-source-view .markdowncompare-block-changed {
+	border-radius: var(--radius-s);
+}
+
+.markdown-source-view .markdowncompare-block-removed {
+	background-color: rgba(var(--color-red-rgb), 0.1);
+	box-shadow: 0 0 0 2px rgba(var(--color-red-rgb), 0.35);
+}
+
+.markdown-source-view .markdowncompare-block-added {
+	background-color: rgba(var(--color-green-rgb), 0.1);
+	box-shadow: 0 0 0 2px rgba(var(--color-green-rgb), 0.35);
+}
+
+.markdown-source-view .markdowncompare-block-changed {
+	background-color: rgba(var(--color-yellow-rgb), 0.08);
+	box-shadow: 0 0 0 2px rgba(var(--color-yellow-rgb), 0.4);
+}

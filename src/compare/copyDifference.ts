@@ -1,7 +1,8 @@
-import { EditorView } from "@codemirror/view";
+import { EditorView, ViewPlugin } from "@codemirror/view";
 import { Platform } from "obsidian";
 import type MarkdownComparePlugin from "../main";
 import { copyBlockEdit } from "../diff/copy";
+import { BLOCK_CLASSES, findBlockWidgets } from "../editor/blockHighlight";
 import type { DiffHunk } from "../ui/DiffView";
 import { refreshComparison } from "./comparison";
 import { getNoteView } from "./panes";
@@ -114,20 +115,69 @@ export function copyDifferenceHandlers(plugin: MarkdownComparePlugin) {
 		return false;
 	};
 
-	return EditorView.domEventHandlers({
-		mousedown: (event, view) => {
-			if (event.button === 2) return rememberRightClick(event, view);
-			if (!isModClick(event)) return false;
-			const side = sideOf(plugin, view);
-			if (!side) return false;
-			if (event.target instanceof Element && event.target.closest(LINK_SELECTOR)) return false;
+	return [
+		EditorView.domEventHandlers({
+			mousedown: (event, view) => {
+				if (event.button === 2) return rememberRightClick(event, view);
+				if (!isModClick(event)) return false;
+				const side = sideOf(plugin, view);
+				if (!side) return false;
+				if (event.target instanceof Element && event.target.closest(LINK_SELECTOR)) return false;
 
-			const line = lineAtEvent(view, event);
-			if (line == null || !copyDifferenceAt(plugin, side, line, side)) return false;
+				const line = lineAtEvent(view, event);
+				if (line == null || !copyDifferenceAt(plugin, side, line, side)) return false;
 
-			event.preventDefault();
-			return true;
+				event.preventDefault();
+				return true;
+			},
+			contextmenu: rememberRightClick,
+		}),
+		copyBlockOnModClick(plugin),
+	];
+}
+
+const BLOCK_SELECTOR = Object.values(BLOCK_CLASSES)
+	.map((name) => `.${name}`)
+	.join(", ");
+
+/**
+ * Cmd+click on a coloured block (a table, callout or embed in Live Preview) copies the first
+ * difference in it. It listens in the capture phase, before the block's own click handling
+ * (such as editing a table cell).
+ */
+function copyBlockOnModClick(plugin: MarkdownComparePlugin) {
+	return ViewPlugin.fromClass(
+		class {
+			constructor(readonly view: EditorView) {
+				view.contentDOM.addEventListener("mousedown", this.onMouseDown, true);
+			}
+
+			destroy() {
+				this.view.contentDOM.removeEventListener("mousedown", this.onMouseDown, true);
+			}
+
+			onMouseDown = (event: MouseEvent) => {
+				if (!isModClick(event)) return;
+				const target = event.target;
+				if (!(target instanceof Element)) return;
+				const blockEl = target.closest(BLOCK_SELECTOR);
+				const side = sideOf(plugin, this.view);
+				if (!blockEl || !side) return;
+				const block = findBlockWidgets(this.view).find(({ el }) => el === blockEl);
+				if (!block) return;
+
+				refreshComparison(plugin);
+				const doc = this.view.state.doc;
+				const lastLine = doc.lineAt(block.to).number;
+				for (let line = doc.lineAt(block.from).number; line <= lastLine; line++) {
+					if (!findDifferenceAt(plugin, side, line)) continue;
+					if (copyDifferenceAt(plugin, side, line, side)) {
+						event.preventDefault();
+						event.stopPropagation();
+					}
+					return;
+				}
+			};
 		},
-		contextmenu: rememberRightClick,
-	});
+	);
 }
