@@ -177,3 +177,12 @@
 	background-color: rgba(var(--color-yellow-rgb), 0.08);
 	box-shadow: 0 0 0 2px rgba(var(--color-yellow-rgb), 0.4);
 }
+
+/* Changed words inside rendered tables (CSS Custom Highlight API) */
+::highlight(markdowncompare-removed-words) {
+	background-color: rgba(var(--color-red-rgb), 0.22);
+}
+
+::highlight(markdowncompare-added-words) {
+	background-color: rgba(var(--color-green-rgb), 0.22);
+}

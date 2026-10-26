@@ -45,7 +45,7 @@ Any file that Obsidian opens in its editor can be compared, for example `.tex` f
 
 ## Good to know
 
-- Highlights show in Source mode and Live Preview. Reading view is not highlighted. In Live Preview, a table, callout or embed that is part of a difference gets a coloured frame, since Obsidian draws it as one block in place of its lines.
+- Highlights show in Source mode and Live Preview. Reading view is not highlighted. In Live Preview, a table, callout or embed that is part of a difference gets a coloured frame, since Obsidian draws it as one block in place of its lines. Inside tables, the changed words are marked in their cells too.
 - The plugin changes a note only when you copy a difference into it. That is an ordinary edit, saved like typing. Highlights disappear when the comparison ends.
 - It makes no network requests.
 

@@ -133,6 +133,16 @@ const jumpLinesField = StateField.define({
 
 export const diffHighlightExtension = [diffDecorationsField, jumpLinesField, blockHighlightPlugin];
 
+/** The word marks between `from` and `to`, as document positions with their class. */
+export function diffMarksBetween(state: EditorState, from: number, to: number) {
+	const marks: Array<{ from: number; to: number; className: string }> = [];
+	state.field(diffDecorationsField, false)?.between(from, to, (markFrom, markTo, decoration) => {
+		const spec = decoration.spec as { class?: string };
+		if (spec.class && markTo > markFrom) marks.push({ from: markFrom, to: markTo, className: spec.class });
+	});
+	return marks;
+}
+
 /** The classes of the line highlights on lines starting between `from` and `to`. */
 export function diffLineClassesBetween(state: EditorState, from: number, to: number) {
 	const classes = new Set<string>();
