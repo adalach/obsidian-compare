@@ -1,6 +1,6 @@
 {
 	"name": "compare",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"private": true,
 	"description": "Compare two notes or LaTeX files side by side in Obsidian and highlight their differences.",
 	"author": "Agata Dalach",
