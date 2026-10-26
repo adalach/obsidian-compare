@@ -1,6 +1,6 @@
 # Compare
 
-Compare two notes side by side, right in the editor. Changed lines and the changed words are highlighted in both notes while you keep writing, sections are matched by their headings, and both notes scroll together. Cmd+click a difference, or a single changed word, to copy it to the other note. LaTeX files are matched by their `\section{…}` commands.
+Compare two notes side by side, right in the editor. Changed lines and the changed words are highlighted in both notes while you keep writing, matching text sits level in both notes, and both notes scroll together. Cmd+click a difference, or a single changed word, to copy it to the other note. LaTeX files are matched by their `\section{…}` commands.
 
 ![Compare highlighting the differences between two notes](assets/markdowncompare-preview.webp)
 
@@ -19,7 +19,8 @@ A comparison stays with its two tabs. You can open other notes, split panes or u
 
 - Lines only in the left note are red, lines only in the right note are green, and changed lines are yellow with the changed words marked.
 - Left and right are where the notes sit on screen (top and bottom in a horizontal split), so the colours stay the same wherever you click.
-- Headings that appear in both notes anchor the comparison: text is only matched within the same section, and scrolling one note keeps the same section in view in the other.
+- Headings that appear in both notes anchor the comparison: text is only matched within the same section.
+- Matching text sits level in both notes: where one note has text the other does not (a new table, an extra paragraph), the other note shows a striped blank space of the same height, and both notes scroll together. The space is only on screen, never in the notes. Turn this off with **Settings → Compare → Line up matching text**; scrolling then keeps the same section in view in both notes.
 - An edited paragraph is found again even when text was added or removed around it, such as a new table above it: lines with at least half of their words in common are paired, so only the changed words are marked, and the added lines show on their own.
 - The **Compare** panel in the right sidebar lists the differences under their headings, one row for each run of consecutive changed lines. Click a difference to jump to it in both notes, or a file name to reveal the file in the file explorer.
 

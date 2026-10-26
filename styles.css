@@ -186,3 +186,14 @@
 ::highlight(markdowncompare-added-words) {
 	background-color: rgba(var(--color-green-rgb), 0.22);
 }
+
+/* Blank space that keeps matching text level ("Line up matching text"); only on screen */
+.markdown-source-view .markdowncompare-gap {
+	height: var(--markdowncompare-gap-height);
+	background-image: repeating-linear-gradient(
+		-45deg,
+		transparent 0 6px,
+		var(--background-modifier-border) 6px 7px
+	);
+	opacity: 0.6;
+}

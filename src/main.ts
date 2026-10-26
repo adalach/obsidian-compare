@@ -7,6 +7,9 @@ import { registerMarkdownCompareMenus } from "./commands/registerMenus";
 import { diffHighlightExtension } from "./editor/diffHighlight";
 import { headingSyntaxFor } from "./headings/headings";
 import { copyDifferenceHandlers } from "./compare/copyDifference";
+import { GapAligner } from "./compare/alignment";
+import { gapsExtension } from "./editor/gaps";
+import { CompareSettingTab, DEFAULT_SETTINGS, type CompareSettings } from "./ui/SettingsTab";
 import {
 	checkComparison,
 	compareNotes,
@@ -25,6 +28,7 @@ import {
 } from "./editor/diffHighlight";
 
 export default class MarkdownComparePlugin extends Plugin {
+	settings: CompareSettings = { ...DEFAULT_SETTINGS };
 	private liveCompare = false;
 	private comparePair: ComparePair | null = null;
 	private statusBarToggleEl: HTMLElement | null = null;
@@ -34,14 +38,19 @@ export default class MarkdownComparePlugin extends Plugin {
 	private stopScrollSync: (() => void) | null = null;
 	private clearJumpTimeoutId: number | null = null;
 	private readonly scheduleRefresh = debounce(() => refreshComparison(this), 300, true);
+	private readonly aligner = new GapAligner();
 
 	async onload() {
+		this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<CompareSettings> | null) };
+		this.addSettingTab(new CompareSettingTab(this.app, this));
+
 		this.registerView(MARKDOWNCOMPARE_DIFF_VIEW_TYPE, (leaf) => {
 			return new MarkdownCompareDiffView(leaf, this);
 		});
 
 		this.registerEditorExtension([
 			diffHighlightExtension,
+			gapsExtension,
 			copyDifferenceHandlers(this),
 			EditorView.updateListener.of((update) => this.onEditorUpdate(update)),
 		]);
@@ -75,6 +84,15 @@ export default class MarkdownComparePlugin extends Plugin {
 	 * else only undo and redo, so undoing a copied difference brings its highlights back.
 	 */
 	private onEditorUpdate(update: ViewUpdate) {
+		// Heights changed (edits, wrapping, blocks drawn, lines measured while scrolling): keep the
+		// matched lines level.
+		if (
+			(update.docChanged || update.heightChanged || update.geometryChanged) &&
+			this.aligner.isAttachedTo(update.view)
+		) {
+			this.aligner.schedule();
+		}
+
 		const targets = this.compareTargets;
 		if (!update.docChanged || !targets) return;
 		if (update.view !== targets.leftEditorView && update.view !== targets.rightEditorView) return;
@@ -87,6 +105,7 @@ export default class MarkdownComparePlugin extends Plugin {
 	onunload() {
 		this.scheduleRefresh.cancel();
 		endComparison(this);
+		this.aligner.detach();
 		this.stopScrollSync?.();
 		this.stopScrollSync = null;
 		if (this.clearJumpTimeoutId != null) window.clearTimeout(this.clearJumpTimeoutId);
@@ -171,16 +190,38 @@ export default class MarkdownComparePlugin extends Plugin {
 		}
 
 		this.compareTargets = targets;
+		this.startSync();
+	}
+
+	/** Scroll sync, and with "Line up matching text" the gaps that keep matched lines level. */
+	private startSync() {
 		this.stopScrollSync?.();
 		this.stopScrollSync = null;
-
+		const targets = this.compareTargets;
+		const gaps = this.settings.alignWithGaps;
+		if (targets && gaps) this.aligner.attach(targets.leftEditorView, targets.rightEditorView);
+		else this.aligner.detach();
 		if (!targets) return;
+
 		this.stopScrollSync = startScrollSync(
 			targets.leftEditorView,
 			targets.rightEditorView,
 			headingSyntaxFor(targets.leftPath),
 			headingSyntaxFor(targets.rightPath),
+			gaps,
 		);
+	}
+
+	/** The comparison's matched lines (1-based [left, right] pairs), kept level by the gaps. */
+	setMatchedLines(matched: Array<[number, number]>) {
+		this.aligner.setMatchedLines(matched);
+	}
+
+	async setAlignWithGaps(value: boolean) {
+		this.settings.alignWithGaps = value;
+		await this.saveData(this.settings);
+		this.startSync();
+		if (this.comparePair) refreshComparison(this);
 	}
 
 	scrollToDiffHunk(hunk: DiffHunk) {

@@ -29,11 +29,21 @@ export function scrollBothEditorsToLines(
 	scrollEditorToLine(right, rightLine);
 }
 
+/** Distance from the top of the editor's scroll area to the top of the note's text. */
+function documentOffset(view: EditorView) {
+	return view.documentTop - view.scrollDOM.getBoundingClientRect().top + view.scrollDOM.scrollTop;
+}
+
+/**
+ * Keep two editors scrolled together. With `exact` (gaps keep the matched lines level), both show
+ * the same stretch of the note; otherwise the top line is mapped through the matched headings.
+ */
 export function startScrollSync(
 	left: EditorView,
 	right: EditorView,
 	leftSyntax: HeadingSyntax,
 	rightSyntax: HeadingSyntax,
+	exact = false,
 ) {
 	let syncing = false;
 	let rafId: number | null = null;
@@ -76,6 +86,11 @@ export function startScrollSync(
 			if (syncing) return;
 			syncing = true;
 			try {
+				if (exact) {
+					const target = src.scrollDOM.scrollTop - documentOffset(src) + documentOffset(dst);
+					if (Math.abs(dst.scrollDOM.scrollTop - target) >= 1) dst.scrollDOM.scrollTop = target;
+					return;
+				}
 				const srcTop = src.scrollDOM.scrollTop;
 				const srcBlock = src.lineBlockAtHeight(srcTop + 2);
 				const srcLine = src.state.doc.lineAt(srcBlock.from).number;

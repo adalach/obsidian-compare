@@ -110,7 +110,7 @@ export function refreshComparison(plugin: MarkdownComparePlugin, options?: Compa
 		return;
 	}
 
-	const { left, right, hunks } = computeHighlights(
+	const { left, right, hunks, matched } = computeHighlights(
 		leftView.editor.getValue(),
 		rightView.editor.getValue(),
 		headingSyntaxFor(pair.leftFile.path),
@@ -126,6 +126,7 @@ export function refreshComparison(plugin: MarkdownComparePlugin, options?: Compa
 		leftPath: pair.leftFile.path,
 		rightPath: pair.rightFile.path,
 	});
+	plugin.setMatchedLines(matched);
 	plugin.setDiffState({
 		leftPath: pair.leftFile.path,
 		rightPath: pair.rightFile.path,

@@ -43,7 +43,13 @@ export function computeHighlights(
 	rightText: string,
 	leftSyntax: HeadingSyntax = "markdown",
 	rightSyntax: HeadingSyntax = "markdown",
-): { left: DiffHighlightSpec; right: DiffHighlightSpec; hunks: DiffHunk[] } {
+): {
+	left: DiffHighlightSpec;
+	right: DiffHighlightSpec;
+	hunks: DiffHunk[];
+	/** Matched lines (equal, or edited versions of each other) as 1-based [left, right] pairs, in order. */
+	matched: Array<[number, number]>;
+} {
 	const leftLines = splitLines(leftText);
 	const rightLines = splitLines(rightText);
 
@@ -229,7 +235,9 @@ export function computeHighlights(
 		run = null;
 	};
 
+	const matched: Array<[number, number]> = [];
 	for (const op of ops) {
+		if (op.type === "equal" || op.type === "changed") matched.push([op.left, op.right]);
 		if (op.type === "equal") {
 			flush();
 			consumedLeft++;
@@ -254,6 +262,7 @@ export function computeHighlights(
 		left: { lines: leftDecorations, marks: leftMarks },
 		right: { lines: rightDecorations, marks: rightMarks },
 		hunks,
+		matched,
 	};
 }
 
