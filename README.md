@@ -1,6 +1,6 @@
 # Compare
 
-Compare two notes side by side, right in the editor. Changed lines and the exact changed characters are highlighted in both notes while you keep writing, sections are matched by their headings, and both notes scroll together. LaTeX files are matched by their `\section{…}` commands.
+Compare two notes side by side, right in the editor. Changed lines and the exact changed characters are highlighted in both notes while you keep writing, sections are matched by their headings, and both notes scroll together. Cmd+click a difference to copy it to the other note. LaTeX files are matched by their `\section{…}` commands.
 
 ![Compare highlighting the differences between two notes](assets/markdowncompare-preview.webp)
 
@@ -20,7 +20,15 @@ A comparison stays with its two tabs. You can open other notes, split panes or u
 - Lines only in the left note are red, lines only in the right note are green, and changed lines are yellow with the changed characters marked.
 - Left and right are where the notes sit on screen (top and bottom in a horizontal split), so the colours stay the same wherever you click.
 - Headings that appear in both notes anchor the comparison: text is only matched within the same section, and scrolling one note keeps the same section in view in the other.
-- The **Compare** panel in the right sidebar lists the differences under their headings. Click a difference to jump to it in both notes, or a file name to reveal the file in the file explorer.
+- The **Compare** panel in the right sidebar lists the differences under their headings, one row for each run of consecutive changed lines. Click a difference to jump to it in both notes, or a file name to reveal the file in the file explorer.
+
+## Copy a difference to the other note
+
+- **Cmd+click** (Ctrl+click on Windows and Linux) a highlighted line to copy its whole difference to the other note, so both notes read the same there. On a link, Cmd+click still opens the link; click beside it instead.
+- **Right-click** a highlighted line and choose **Copy to *other note*** or **Use *other note*'s version**. For lines only one note has, the second item deletes them.
+- **Compare: Copy difference to the other note** and **Compare: Use the other note's version** do the same for the difference at the cursor, so you can give them hotkeys.
+
+After a copy, the cursor moves to the changed lines, so **Cmd+Z** (Ctrl+Z) undoes the copy straight away, and the highlights come back.
 
 ## LaTeX and other text files
 
@@ -37,7 +45,7 @@ Any file that Obsidian opens in its editor can be compared, for example `.tex` f
 ## Good to know
 
 - Highlights show in Source mode and Live Preview. Reading view is not highlighted.
-- The plugin never changes your notes. Highlights disappear when the comparison ends.
+- The plugin changes a note only when you copy a difference into it. That is an ordinary edit, saved like typing. Highlights disappear when the comparison ends.
 - It makes no network requests.
 
 ## Install

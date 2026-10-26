@@ -1,6 +1,14 @@
 import type MarkdownComparePlugin from "../main";
 import { compareFiles, compareLeafWithFile, pickNoteToCompare } from "../compare/comparison";
 import { getCurrentNoteLeaf, getNoteView, opensInEditor } from "../compare/panes";
+import {
+	copyDifferenceAt,
+	findDifferenceAt,
+	lineForEditorMenu,
+	otherSide,
+	sideOf,
+} from "../compare/copyDifference";
+import { refreshComparison } from "../compare/comparison";
 
 export function registerMarkdownCompareMenus(plugin: MarkdownComparePlugin) {
 	// A note's menu (file explorer, links, search results, tab header): compare it with the
@@ -46,6 +54,38 @@ export function registerMarkdownCompareMenus(plugin: MarkdownComparePlugin) {
 					.setTitle("Compare the two notes")
 					.setIcon("scale")
 					.onClick(() => void compareFiles(plugin, first, second)),
+			);
+		}),
+	);
+
+	// Right-click on a difference in either note of the comparison: copy it to the other note, or
+	// take the other note's version (which deletes lines the other note does not have).
+	plugin.registerEvent(
+		plugin.app.workspace.on("editor-menu", (menu, editor, info) => {
+			const side = sideOf(plugin, info);
+			const pair = plugin.getComparePair();
+			if (!side || !pair) return;
+
+			refreshComparison(plugin);
+			const line = lineForEditorMenu(side, editor.getCursor().line + 1);
+			const hunk = findDifferenceAt(plugin, side, line);
+			if (!hunk) return;
+
+			const other = (side === "left" ? pair.rightFile : pair.leftFile).basename;
+			const otherHasLines = (side === "left" ? hunk.rightCount : hunk.leftCount) > 0;
+			const towardsOther = side === "left" ? "arrow-right" : "arrow-left";
+			const towardsThis = side === "left" ? "arrow-left" : "arrow-right";
+			menu.addItem((item) =>
+				item
+					.setTitle(`Copy to ${other}`)
+					.setIcon(towardsOther)
+					.onClick(() => copyDifferenceAt(plugin, side, line, side)),
+			);
+			menu.addItem((item) =>
+				item
+					.setTitle(otherHasLines ? `Use ${other}'s version` : `Delete (not in ${other})`)
+					.setIcon(towardsThis)
+					.onClick(() => copyDifferenceAt(plugin, side, line, otherSide(side))),
 			);
 		}),
 	);

@@ -1,3 +1,4 @@
+import { EditorView, type ViewUpdate } from "@codemirror/view";
 import { Notice, Platform, Plugin, TFile, debounce, setIcon } from "obsidian";
 import { MarkdownCompareDiffView, type DiffHunk, type DiffState } from "./ui/DiffView";
 import { MARKDOWNCOMPARE_DIFF_VIEW_TYPE } from "./ui/constants";
@@ -5,6 +6,7 @@ import { registerMarkdownCompareCommands } from "./commands/registerCommands";
 import { registerMarkdownCompareMenus } from "./commands/registerMenus";
 import { diffHighlightExtension } from "./editor/diffHighlight";
 import { headingSyntaxFor } from "./headings/headings";
+import { copyDifferenceHandlers } from "./compare/copyDifference";
 import {
 	checkComparison,
 	compareNotes,
@@ -38,7 +40,11 @@ export default class MarkdownComparePlugin extends Plugin {
 			return new MarkdownCompareDiffView(leaf, this);
 		});
 
-		this.registerEditorExtension(diffHighlightExtension);
+		this.registerEditorExtension([
+			diffHighlightExtension,
+			copyDifferenceHandlers(this),
+			EditorView.updateListener.of((update) => this.onEditorUpdate(update)),
+		]);
 		registerMarkdownCompareCommands(this);
 		registerMarkdownCompareMenus(this);
 
@@ -62,14 +68,20 @@ export default class MarkdownComparePlugin extends Plugin {
 
 		this.registerEvent(this.app.workspace.on("layout-change", () => checkComparison(this)));
 		this.registerEvent(this.app.workspace.on("file-open", () => checkComparison(this)));
-		this.registerEvent(
-			this.app.workspace.on("editor-change", (_editor, info) => {
-				const pair = this.comparePair;
-				if (!this.liveCompare || !pair) return;
-				if (info !== pair.leftLeaf.view && info !== pair.rightLeaf.view) return;
-				this.scheduleRefresh();
-			}),
+	}
+
+	/**
+	 * Refresh after edits to either note of the comparison: every edit with live updates on,
+	 * else only undo and redo, so undoing a copied difference brings its highlights back.
+	 */
+	private onEditorUpdate(update: ViewUpdate) {
+		const targets = this.compareTargets;
+		if (!update.docChanged || !targets) return;
+		if (update.view !== targets.leftEditorView && update.view !== targets.rightEditorView) return;
+		const undoOrRedo = update.transactions.some(
+			(tr) => tr.isUserEvent("undo") || tr.isUserEvent("redo"),
 		);
+		if (this.liveCompare || undoOrRedo) this.scheduleRefresh();
 	}
 
 	onunload() {
@@ -141,6 +153,10 @@ export default class MarkdownComparePlugin extends Plugin {
 		};
 	}
 
+	getCompareTargets() {
+		return this.compareTargets;
+	}
+
 	setCompareTargets(targets: CompareTargets | null) {
 		if (!targets && !this.compareTargets) return;
 
@@ -169,18 +185,19 @@ export default class MarkdownComparePlugin extends Plugin {
 
 	scrollToDiffHunk(hunk: DiffHunk) {
 		if (!this.compareTargets) return;
-		const leftLine = hunk.leftLine ?? hunk.rightLine ?? 1;
-		const rightLine = hunk.rightLine ?? hunk.leftLine ?? 1;
+		const leftLine = hunk.leftLine ?? hunk.leftStart;
+		const rightLine = hunk.rightLine ?? hunk.rightStart;
 		scrollBothEditorsToLines(
 			this.compareTargets.leftEditorView,
 			this.compareTargets.rightEditorView,
 			leftLine,
 			rightLine,
 		);
-		this.pulseJumpHighlight(leftLine, rightLine);
+		this.flashLines(leftLine, rightLine);
 	}
 
-	private pulseJumpHighlight(leftLine: number, rightLine: number) {
+	/** Flash a line in each note of the comparison (1-based line numbers). */
+	flashLines(leftLine: number, rightLine: number) {
 		if (!this.compareTargets) return;
 
 		if (this.clearJumpTimeoutId != null) window.clearTimeout(this.clearJumpTimeoutId);

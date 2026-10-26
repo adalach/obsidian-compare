@@ -115,9 +115,10 @@ export function computeHighlights(
 
 	let augLi = 0;
 	let augRi = 0;
-	// Last-seen original line numbers — used as fallback context in flush().
-	let ctxLeft = 1;
-	let ctxRight = 1;
+	// Original lines consumed so far on each side (sentinels excluded): a pending
+	// block starts right after the lines consumed before it.
+	let consumedLeft = 0;
+	let consumedRight = 0;
 	let pendingDeletes: number[] = [];
 	let pendingInserts: number[] = [];
 
@@ -135,108 +136,63 @@ export function computeHighlights(
 		return raw.replace(/\t/g, "    ").slice(0, 80);
 	};
 
+	// One hunk per block of consecutive differing lines. leftStart/rightStart say where the
+	// block sits on each side, also on a side where it has no lines (where it would go).
 	const flush = () => {
-		if (pendingDeletes.length > 0 && pendingInserts.length > 0) {
-			const leftStart = pendingDeletes[0] ?? null;
-			const rightStart = pendingInserts[0] ?? null;
-			const leftContextLine = leftStart ?? Math.max(1, ctxLeft);
-			const rightContextLine = rightStart ?? Math.max(1, ctxRight);
-			hunks.push({
-				kind: "changed",
-				leftLine: leftStart,
-				rightLine: rightStart,
-				leftCount: pendingDeletes.length,
-				rightCount: pendingInserts.length,
-				preview: getPreview("changed", leftStart, rightStart),
-				leftHeader: headingLabelAt(leftHeadings, leftContextLine),
-				rightHeader: headingLabelAt(rightHeadings, rightContextLine),
-			});
+		const leftCount = pendingDeletes.length;
+		const rightCount = pendingInserts.length;
+		if (leftCount === 0 && rightCount === 0) return;
 
-			const pairCount = Math.min(pendingDeletes.length, pendingInserts.length);
+		const leftStart = consumedLeft - leftCount + 1;
+		const rightStart = consumedRight - rightCount + 1;
+		const kind: DiffHunk["kind"] =
+			leftCount > 0 && rightCount > 0 ? "changed" : leftCount > 0 ? "removed" : "added";
+		const leftLine = leftCount > 0 ? leftStart : null;
+		const rightLine = rightCount > 0 ? rightStart : null;
+		hunks.push({
+			kind,
+			leftLine,
+			rightLine,
+			leftCount,
+			rightCount,
+			leftStart,
+			rightStart,
+			preview: getPreview(kind, leftLine, rightLine),
+			// A side without lines takes the heading of the line above the block.
+			leftHeader: headingLabelAt(leftHeadings, Math.max(1, leftLine ?? leftStart - 1)),
+			rightHeader: headingLabelAt(rightHeadings, Math.max(1, rightLine ?? rightStart - 1)),
+		});
 
-			for (let i = 0; i < pairCount; i++) {
-				const leftLineNo = pendingDeletes[i];
-				const rightLineNo = pendingInserts[i];
-				if (leftLineNo == null || rightLineNo == null) continue;
+		const pairCount = Math.min(leftCount, rightCount);
 
-				leftDecorations.push({ line: leftLineNo, className: CHANGED_CLASS });
-				rightDecorations.push({ line: rightLineNo, className: CHANGED_CLASS });
+		for (let i = 0; i < pairCount; i++) {
+			const leftLineNo = pendingDeletes[i];
+			const rightLineNo = pendingInserts[i];
+			if (leftLineNo == null || rightLineNo == null) continue;
 
-				const leftLineText = leftLines[leftLineNo - 1] ?? "";
-				const rightLineText = rightLines[rightLineNo - 1] ?? "";
-				const { left: leftRanges, right: rightRanges } = diffCharRanges(
-					leftLineText,
-					rightLineText,
-				);
+			leftDecorations.push({ line: leftLineNo, className: CHANGED_CLASS });
+			rightDecorations.push({ line: rightLineNo, className: CHANGED_CLASS });
 
-				for (const [from, to] of leftRanges) {
-					leftMarks.push({ line: leftLineNo, from, to, className: REMOVED_CHAR_CLASS });
-				}
-				for (const [from, to] of rightRanges) {
-					rightMarks.push({ line: rightLineNo, from, to, className: ADDED_CHAR_CLASS });
-				}
+			const leftLineText = leftLines[leftLineNo - 1] ?? "";
+			const rightLineText = rightLines[rightLineNo - 1] ?? "";
+			const { left: leftRanges, right: rightRanges } = diffCharRanges(
+				leftLineText,
+				rightLineText,
+			);
+
+			for (const [from, to] of leftRanges) {
+				leftMarks.push({ line: leftLineNo, from, to, className: REMOVED_CHAR_CLASS });
 			}
+			for (const [from, to] of rightRanges) {
+				rightMarks.push({ line: rightLineNo, from, to, className: ADDED_CHAR_CLASS });
+			}
+		}
 
-			for (const line of pendingDeletes.slice(pairCount)) {
-				leftDecorations.push({ line, className: REMOVED_CLASS });
-				hunks.push({
-					kind: "removed",
-					leftLine: line,
-					rightLine: null,
-					leftCount: 1,
-					rightCount: 0,
-					preview: getPreview("removed", line, null),
-					leftHeader: headingLabelAt(leftHeadings, line),
-					rightHeader: headingLabelAt(rightHeadings, Math.max(1, ctxRight)),
-				});
-			}
-			for (const line of pendingInserts.slice(pairCount)) {
-				rightDecorations.push({ line, className: ADDED_CLASS });
-				hunks.push({
-					kind: "added",
-					leftLine: null,
-					rightLine: line,
-					leftCount: 0,
-					rightCount: 1,
-					preview: getPreview("added", null, line),
-					leftHeader: headingLabelAt(leftHeadings, Math.max(1, ctxLeft)),
-					rightHeader: headingLabelAt(rightHeadings, line),
-				});
-			}
-		} else if (pendingDeletes.length > 0) {
-			const leftStart = pendingDeletes[0] ?? null;
-			const leftContextLine = leftStart ?? Math.max(1, ctxLeft);
-			const rightContextLine = Math.max(1, ctxRight);
-			hunks.push({
-				kind: "removed",
-				leftLine: leftStart,
-				rightLine: null,
-				leftCount: pendingDeletes.length,
-				rightCount: 0,
-				preview: getPreview("removed", leftStart, null),
-				leftHeader: headingLabelAt(leftHeadings, leftContextLine),
-				rightHeader: headingLabelAt(rightHeadings, rightContextLine),
-			});
-			for (const line of pendingDeletes) {
-				leftDecorations.push({ line, className: REMOVED_CLASS });
-			}
-		} else if (pendingInserts.length > 0) {
-			const rightStart = pendingInserts[0] ?? null;
-			const leftContextLine = Math.max(1, ctxLeft);
-			const rightContextLine = rightStart ?? Math.max(1, ctxRight);
-			hunks.push({
-				kind: "added",
-				leftLine: null,
-				rightLine: rightStart,
-				leftCount: 0,
-				rightCount: pendingInserts.length,
-				preview: getPreview("added", null, rightStart),
-				leftHeader: headingLabelAt(leftHeadings, leftContextLine),
-				rightHeader: headingLabelAt(rightHeadings, rightContextLine),
-			});
-			for (const line of pendingInserts) {
-				rightDecorations.push({ line, className: ADDED_CLASS });
-			}
+		for (const line of pendingDeletes.slice(pairCount)) {
+			leftDecorations.push({ line, className: REMOVED_CLASS });
+		}
+		for (const line of pendingInserts.slice(pairCount)) {
+			rightDecorations.push({ line, className: ADDED_CLASS });
 		}
 
 		pendingDeletes = [];
@@ -251,9 +207,9 @@ export function computeHighlights(
 				const origRight = rightLineOf[augRi] ?? null;
 				augLi++;
 				augRi++;
-				// Update context after flush; skip sentinels (null entries).
-				if (origLeft !== null) ctxLeft = origLeft;
-				if (origRight !== null) ctxRight = origRight;
+				// Count after flush; skip sentinels (null entries).
+				if (origLeft !== null) consumedLeft++;
+				if (origRight !== null) consumedRight++;
 				break;
 			}
 			case "delete": {
@@ -261,7 +217,7 @@ export function computeHighlights(
 				augLi++;
 				if (origLeft !== null) {
 					pendingDeletes.push(origLeft);
-					ctxLeft = origLeft;
+					consumedLeft++;
 				}
 				break;
 			}
@@ -270,7 +226,7 @@ export function computeHighlights(
 				augRi++;
 				if (origRight !== null) {
 					pendingInserts.push(origRight);
-					ctxRight = origRight;
+					consumedRight++;
 				}
 				break;
 			}

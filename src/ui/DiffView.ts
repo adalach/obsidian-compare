@@ -11,6 +11,9 @@ export interface DiffHunk {
 	rightLine: number | null;
 	leftCount: number;
 	rightCount: number;
+	/** 1-based first line of the block on each side; on a side without lines, the line it would go before. */
+	leftStart: number;
+	rightStart: number;
 	preview: string;
 	leftHeader: string | null;
 	rightHeader: string | null;
