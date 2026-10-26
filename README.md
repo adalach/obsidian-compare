@@ -44,4 +44,4 @@ Any file that Obsidian opens in its editor can be compared, for example `.tex` f
 
 In Obsidian, open **Settings → Community plugins → Browse**, search for **Compare**, install it and turn it on.
 
-To install by hand, download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/adalach/obsidian-markdown-compare/releases/latest) into `<vault>/.obsidian/plugins/compare/`, then turn the plugin on under **Settings → Community plugins**.
+To install by hand, download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/adalach/obsidian-compare/releases/latest) into `<vault>/.obsidian/plugins/compare/`, then turn the plugin on under **Settings → Community plugins**.
