@@ -1,17 +1,10 @@
-import { MarkdownView, Notice, WorkspaceSidedock } from "obsidian";
-import type MarkdownComparePlugin from "../main";
 import type {
 	DiffHighlightSpec,
 	DiffLineDecoration,
 	DiffMarkDecoration,
 } from "../editor/diffHighlight";
-import {
-	clearDiffHighlights,
-	getEditorViewFromMarkdownView,
-	setDiffHighlights,
-} from "../editor/diffHighlight";
-import { diffLinesMyers } from "../diff/myersLineDiff";
-import { diffMyers } from "../diff/myersDiff";
+import { diffLinesMyers } from "./myersLineDiff";
+import { diffMyers } from "./myersDiff";
 import type { DiffHunk } from "../ui/DiffView";
 import { computeHeadingAnchors, type HeadingAnchor } from "../scroll/headingAnchors";
 
@@ -43,7 +36,7 @@ function filterMonotoneAnchors(anchors: HeadingAnchor[]): HeadingAnchor[] {
 	return result;
 }
 
-function computeHighlights(
+export function computeHighlights(
 	leftText: string,
 	rightText: string,
 ): { left: DiffHighlightSpec; right: DiffHighlightSpec; hunks: DiffHunk[] } {
@@ -346,128 +339,3 @@ function diffCharRanges(left: string, right: string) {
 	return { left: leftRanges, right: rightRanges };
 }
 
-function chooseTwoMarkdownViews(
-	plugin: MarkdownComparePlugin,
-): [MarkdownView, MarkdownView] | null {
-	const leaves = plugin.app.workspace.getLeavesOfType("markdown");
-	const isLeafVisible = (leaf: (typeof leaves)[number]) => {
-		const el = leaf.view.containerEl;
-		return el.isConnected && el.offsetParent !== null;
-	};
-
-	const isLeafInSidedock = (leaf: (typeof leaves)[number]) => {
-		const el = leaf.view.containerEl;
-		if (
-			el.closest(".workspace-split.mod-left-split") ||
-			el.closest(".workspace-split.mod-right-split")
-		) {
-			return true;
-		}
-
-		type ParentNode = { parent?: ParentNode };
-		let parent: ParentNode | null = leaf.parent as ParentNode;
-			while (parent) {
-				if (parent instanceof WorkspaceSidedock) return true;
-			const next: ParentNode | null = parent.parent ?? null;
-			if (!next || next === parent) return false;
-			parent = next;
-			}
-		return false;
-	};
-
-	const visibleMarkdownViews = leaves
-		.filter(isLeafVisible)
-		.filter((leaf) => !isLeafInSidedock(leaf))
-		.map((leaf) => leaf.view)
-		.filter((view): view is MarkdownView => view instanceof MarkdownView)
-		.filter((view) => view.file != null);
-
-	if (visibleMarkdownViews.length !== 2) return null;
-
-	const first = visibleMarkdownViews[0];
-	const second = visibleMarkdownViews[1];
-	if (!first || !second) return null;
-
-	const active = plugin.app.workspace.getActiveViewOfType(MarkdownView);
-	if (active && (active === first || active === second)) {
-		const other = active === first ? second : first;
-		return [active, other];
-	}
-
-	return [first, second];
-}
-
-export function compareTwoVisibleMarkdownViews(
-	plugin: MarkdownComparePlugin,
-	options?: { showNotice?: boolean; clearWhenNotComparable?: boolean },
-) {
-	const pair = chooseTwoMarkdownViews(plugin);
-	if (!pair) {
-		if (options?.clearWhenNotComparable) clearAllCompareHighlights(plugin);
-		plugin.setCompareTargets(null);
-		plugin.setDiffState(null);
-		if (options?.showNotice ?? true) {
-			new Notice(
-				"Open exactly two Markdown panes in the main window, then run compare.",
-			);
-		}
-		return;
-	}
-
-	const [leftView, rightView] = pair;
-	const leftEditorView = getEditorViewFromMarkdownView(leftView);
-	const rightEditorView = getEditorViewFromMarkdownView(rightView);
-
-	if (!leftEditorView || !rightEditorView) {
-		if (options?.clearWhenNotComparable) clearAllCompareHighlights(plugin);
-		plugin.setCompareTargets(null);
-		plugin.setDiffState(null);
-		if (options?.showNotice ?? true) {
-			new Notice(
-				"Switch both panes to source mode or live preview before comparing.",
-			);
-		}
-		return;
-	}
-
-	clearAllCompareHighlights(plugin);
-
-	const { left, right, hunks } = computeHighlights(
-		leftView.editor.getValue(),
-		rightView.editor.getValue(),
-	);
-
-	setDiffHighlights(leftEditorView, left);
-	setDiffHighlights(rightEditorView, right);
-
-	plugin.setCompareTargets({
-		leftEditorView,
-		rightEditorView,
-		leftPath: leftView.file?.path ?? "(unknown)",
-		rightPath: rightView.file?.path ?? "(unknown)",
-	});
-	plugin.setDiffState({
-		leftPath: leftView.file?.path ?? "(unknown)",
-		rightPath: rightView.file?.path ?? "(unknown)",
-		hunks,
-	});
-
-	if (options?.showNotice ?? true) {
-		new Notice("Differences highlighted.");
-	}
-}
-
-export function clearAllCompareHighlights(plugin: MarkdownComparePlugin) {
-	const allMarkdownViews = plugin.app.workspace
-		.getLeavesOfType("markdown")
-		.map((leaf) => leaf.view)
-		.filter((view): view is MarkdownView => view instanceof MarkdownView);
-
-	for (const view of allMarkdownViews) {
-		const editorView = getEditorViewFromMarkdownView(view);
-		if (editorView) clearDiffHighlights(editorView);
-	}
-
-	plugin.setCompareTargets(null);
-	plugin.setDiffState(null);
-}

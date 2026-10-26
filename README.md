@@ -1,26 +1,39 @@
 # MarkdownCompare
 
-Compare two open Obsidian notes (split view) and highlight line-level differences.
+Compare two notes side by side, right in the editor. Changed lines and the exact changed characters are highlighted in both notes while you keep writing, sections are matched by their headings, and both notes scroll together.
 
-![markdowncompare-preview.webp](src/markdowncompare-preview.webp)
+![MarkdownCompare highlighting the differences between two notes](assets/markdowncompare-preview.webp)
 
-## Usage
+## Start a comparison
 
-1. Open exactly 2 markdown panes (vertical or horizontal split).
-2. Run the command `Compare two files`.
-3. To remove highlighting, run `Clear compare highlights`.
-4. To keep highlights updated while you edit, run `Toggle live compare`.
-5. (Desktop) You can also toggle live compare from the status bar (scale icon).
-6. (Desktop) The right sidebar panel lists differences and lets you jump between them.
+- **Two notes open side by side:** run **MarkdownCompare: Compare two notes** from the command palette. They are compared straight away.
+- **Any other layout:** the same command, or **Compare current note with…**, asks which note to compare the current one with. Notes open in tabs come first, then recently opened ones. A note that is not on screen opens in a split to the right.
+- **From a menu:**
+  - Right-click a note in the file explorer, a link or a search result, and choose **Compare with *current note***.
+  - Right-click a tab and choose **Compare with…**.
+  - Select two notes in the file explorer, right-click and choose **Compare the two notes**.
 
-Notes:
-- Both panes must be in **Source mode** or **Live Preview** (Reading view can’t be decorated).
-- It highlights changed/added/removed lines and also the exact changed characters for modified lines.
+A comparison stays with its two tabs. You can open other notes, split panes or use the sidebars, and it keeps going. It ends when you close either tab, open another note in it, or run **Stop comparing**.
 
-## Manual install
+## What you see
 
-Copy `main.js`, `manifest.json`, and `styles.css` into:
+- Lines only in the left note are red, lines only in the right note are green, and changed lines are yellow with the changed characters marked.
+- Left and right are where the notes sit on screen (top and bottom in a horizontal split), so the colours stay the same wherever you click.
+- Headings that appear in both notes anchor the comparison: text is only matched within the same section, and scrolling one note keeps the same section in view in the other.
+- The **Markdown compare** panel in the right sidebar lists the differences under their headings. Click a difference to jump to it in both notes, or a file name to reveal the note in the file explorer.
 
-`<Vault>/.obsidian/plugins/markdown-compare/`
+## Live compare
 
-Then turn this plugin on in the Community Plugins list.
+**Toggle live compare**, or the scale icon in the status bar on desktop, keeps the highlights up to date while you edit either note. It stays on for later comparisons until you turn it off or run **Stop comparing**.
+
+## Good to know
+
+- Highlights show in Source mode and Live Preview. Reading view is not highlighted.
+- The plugin never changes your notes. Highlights disappear when the comparison ends.
+- It makes no network requests.
+
+## Install
+
+In Obsidian, open **Settings → Community plugins → Browse**, search for **MarkdownCompare**, install it and turn it on.
+
+To install by hand, download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/adalach/obsidian-markdown-compare/releases/latest) into `<vault>/.obsidian/plugins/markdown-compare/`, then turn the plugin on under **Settings → Community plugins**.

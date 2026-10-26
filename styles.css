@@ -150,3 +150,8 @@
 		background-color: rgba(var(--color-purple-rgb), 0.0);
 	}
 }
+
+.markdowncompare-picker-open {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}

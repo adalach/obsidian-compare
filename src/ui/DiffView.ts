@@ -1,5 +1,6 @@
-import { ItemView, type WorkspaceLeaf } from "obsidian";
+import { ItemView, setIcon, type WorkspaceLeaf } from "obsidian";
 import type MarkdownComparePlugin from "../main";
+import { compareNotes } from "../compare/comparison";
 import { MARKDOWNCOMPARE_DIFF_VIEW_TYPE } from "./constants";
 
 export type DiffHunkKind = "changed" | "added" | "removed";
@@ -67,11 +68,25 @@ export class MarkdownCompareDiffView extends ItemView {
 
 		if (!state) {
 			contentEl.createDiv({
-				text: "Run the compare two files command to populate this list.",
+				text: "Compare two notes to list their differences here.",
 				cls: "markdowncompare-diffview-empty",
 			});
+			const start = contentEl.createEl("button", { text: "Compare two notes" });
+			start.addEventListener("click", () => compareNotes(this.plugin, { showNotice: true }));
 			return;
 		}
+
+		const stop = header.createDiv({
+			cls: "clickable-icon",
+			attr: { "aria-label": "Stop comparing", role: "button", tabindex: "0" },
+		});
+		setIcon(stop, "x");
+		stop.addEventListener("click", () => this.plugin.stopComparing());
+		stop.addEventListener("keydown", (evt: KeyboardEvent) => {
+			if (evt.key !== "Enter" && evt.key !== " ") return;
+			evt.preventDefault();
+			this.plugin.stopComparing();
+		});
 
 		const files = contentEl.createDiv({ cls: "markdowncompare-diffview-files" });
 		const leftFile = files.createDiv({

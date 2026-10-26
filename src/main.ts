@@ -1,12 +1,16 @@
-import { Notice, Platform, Plugin, TFile, setIcon } from "obsidian";
+import { Notice, Platform, Plugin, TFile, debounce, setIcon } from "obsidian";
 import { MarkdownCompareDiffView, type DiffHunk, type DiffState } from "./ui/DiffView";
 import { MARKDOWNCOMPARE_DIFF_VIEW_TYPE } from "./ui/constants";
 import { registerMarkdownCompareCommands } from "./commands/registerCommands";
+import { registerMarkdownCompareMenus } from "./commands/registerMenus";
 import { diffHighlightExtension } from "./editor/diffHighlight";
 import {
-	clearAllCompareHighlights,
-	compareTwoVisibleMarkdownViews,
-} from "./commands/compareTwoVisibleMarkdownViews";
+	checkComparison,
+	compareNotes,
+	endComparison,
+	refreshComparison,
+	type ComparePair,
+} from "./compare/comparison";
 import {
 	scrollBothEditorsToLines,
 	startScrollSync,
@@ -18,13 +22,15 @@ import {
 } from "./editor/diffHighlight";
 
 export default class MarkdownComparePlugin extends Plugin {
-	private liveCompareIntervalId: number | null = null;
+	private liveCompare = false;
+	private comparePair: ComparePair | null = null;
 	private statusBarToggleEl: HTMLElement | null = null;
 	private diffState: DiffState | null = null;
 	private diffStateListeners = new Set<(state: DiffState | null) => void>();
 	private compareTargets: CompareTargets | null = null;
 	private stopScrollSync: (() => void) | null = null;
 	private clearJumpTimeoutId: number | null = null;
+	private readonly scheduleRefresh = debounce(() => refreshComparison(this), 300, true);
 
 	async onload() {
 		this.registerView(MARKDOWNCOMPARE_DIFF_VIEW_TYPE, (leaf) => {
@@ -33,6 +39,7 @@ export default class MarkdownComparePlugin extends Plugin {
 
 		this.registerEditorExtension(diffHighlightExtension);
 		registerMarkdownCompareCommands(this);
+		registerMarkdownCompareMenus(this);
 
 		if (!Platform.isMobile) {
 			this.statusBarToggleEl = this.addStatusBarItem();
@@ -52,68 +59,52 @@ export default class MarkdownComparePlugin extends Plugin {
 			this.updateStatusBar();
 		}
 
+		this.registerEvent(this.app.workspace.on("layout-change", () => checkComparison(this)));
+		this.registerEvent(this.app.workspace.on("file-open", () => checkComparison(this)));
 		this.registerEvent(
-			this.app.workspace.on("layout-change", () => {
-				if (this.liveCompareIntervalId == null) return;
-				this.refreshLiveCompare();
-			}),
-		);
-		this.registerEvent(
-			this.app.workspace.on("active-leaf-change", () => {
-				if (this.liveCompareIntervalId == null) return;
-				this.refreshLiveCompare();
+			this.app.workspace.on("editor-change", (_editor, info) => {
+				const pair = this.comparePair;
+				if (!this.liveCompare || !pair) return;
+				if (info !== pair.leftLeaf.view && info !== pair.rightLeaf.view) return;
+				this.scheduleRefresh();
 			}),
 		);
 	}
 
 	onunload() {
-		this.stopLiveCompare();
-		clearAllCompareHighlights(this);
+		this.scheduleRefresh.cancel();
+		endComparison(this);
 		this.stopScrollSync?.();
 		this.stopScrollSync = null;
 		if (this.clearJumpTimeoutId != null) window.clearTimeout(this.clearJumpTimeoutId);
 		this.clearJumpTimeoutId = null;
 	}
 
+	/** Live compare updates the highlights while you edit either note of the comparison. */
 	toggleLiveCompare() {
-		if (this.liveCompareIntervalId == null) {
-			this.startLiveCompare();
-		} else {
-			this.stopLiveCompare();
-			clearAllCompareHighlights(this);
+		if (this.liveCompare) {
+			this.stopComparing();
 			new Notice("Live compare off.");
+			return;
 		}
+
+		this.liveCompare = true;
 		this.updateStatusBar();
-	}
-
-	private startLiveCompare() {
-		if (this.liveCompareIntervalId != null) return;
-
 		new Notice("Live compare on.");
-		void this.ensureDiffView();
-		this.refreshLiveCompare();
-
-		this.liveCompareIntervalId = window.setInterval(() => {
-			this.refreshLiveCompare();
-		}, 2000);
+		if (this.comparePair) refreshComparison(this);
+		else compareNotes(this);
 	}
 
-	private stopLiveCompare() {
-		if (this.liveCompareIntervalId == null) return;
-		window.clearInterval(this.liveCompareIntervalId);
-		this.liveCompareIntervalId = null;
-	}
-
-	private refreshLiveCompare() {
-		compareTwoVisibleMarkdownViews(this, {
-			showNotice: false,
-			clearWhenNotComparable: true,
-		});
+	stopComparing() {
+		this.liveCompare = false;
+		this.scheduleRefresh.cancel();
+		this.updateStatusBar();
+		endComparison(this);
 	}
 
 	private updateStatusBar() {
 		if (!this.statusBarToggleEl) return;
-		const on = this.liveCompareIntervalId != null;
+		const on = this.liveCompare;
 		this.statusBarToggleEl.toggleClass("is-active", on);
 		this.statusBarToggleEl.setAttr(
 			"aria-label",
@@ -123,6 +114,14 @@ export default class MarkdownComparePlugin extends Plugin {
 			"title",
 			on ? "Live compare on" : "Live compare off",
 		);
+	}
+
+	getComparePair() {
+		return this.comparePair;
+	}
+
+	setComparePair(pair: ComparePair | null) {
+		this.comparePair = pair;
 	}
 
 	getDiffState() {
@@ -196,32 +195,11 @@ export default class MarkdownComparePlugin extends Plugin {
 	}
 
 	async ensureDiffView() {
-		type EnsureSideLeafOptions = {
-			active?: boolean;
-			reveal?: boolean;
-			split?: boolean;
-		};
-		type WorkspaceWithEnsureSideLeaf = {
-			ensureSideLeaf?: (
-				viewType: string,
-				side: "left" | "right",
-				options?: EnsureSideLeafOptions,
-			) => Promise<void>;
-		};
-
-		const workspace = this.app.workspace as typeof this.app.workspace &
-			WorkspaceWithEnsureSideLeaf;
-		if (typeof workspace.ensureSideLeaf === "function") {
-			await workspace.ensureSideLeaf(MARKDOWNCOMPARE_DIFF_VIEW_TYPE, "right", {
-				active: false,
-				reveal: true,
-				split: false,
-			});
-			return;
-		}
-
-		const leaf = this.app.workspace.getRightLeaf(false) ?? this.app.workspace.getLeaf(true);
-		await leaf.setViewState({ type: MARKDOWNCOMPARE_DIFF_VIEW_TYPE, active: false });
+		await this.app.workspace.ensureSideLeaf(MARKDOWNCOMPARE_DIFF_VIEW_TYPE, "right", {
+			active: false,
+			reveal: true,
+			split: false,
+		});
 	}
 
 	revealFileInFileExplorer(filePath: string) {
@@ -238,7 +216,7 @@ export default class MarkdownComparePlugin extends Plugin {
 		const candidates: RevealInFolderTarget[] = [];
 		const addCandidate = (candidate: unknown) => {
 			if (candidate && typeof candidate === "object") {
-				candidates.push(candidate as RevealInFolderTarget);
+				candidates.push(candidate);
 			}
 		};
 
