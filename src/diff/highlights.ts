@@ -5,6 +5,7 @@ import type {
 } from "../editor/diffHighlight";
 import { diffLinesMyers } from "./myersLineDiff";
 import { diffMyers } from "./myersDiff";
+import { alignLines, isWeakLine, type AlignOp } from "./align";
 import type { DiffHunk } from "../ui/DiffView";
 import { computeHeadingAnchors, type HeadingAnchor } from "../scroll/headingAnchors";
 import { extractHeadings, headingLabelAt, type HeadingSyntax } from "../headings/headings";
@@ -107,20 +108,50 @@ export function computeHighlights(
 
 	const edits = diffLinesMyers(augLeft, augRight);
 
+	// The line diff as 1-based original line numbers; a section sentinel has neither.
+	const entries: LineEntry[] = [];
+	let augLi = 0;
+	let augRi = 0;
+	for (const edit of edits) {
+		if (edit.type === "equal") {
+			entries.push({ type: "equal", left: leftLineOf[augLi] ?? null, right: rightLineOf[augRi] ?? null });
+			augLi++;
+			augRi++;
+		} else if (edit.type === "delete") {
+			const left = leftLineOf[augLi++] ?? null;
+			if (left !== null) entries.push({ type: "delete", left, right: null });
+		} else {
+			const right = rightLineOf[augRi++] ?? null;
+			if (right !== null) entries.push({ type: "insert", left: null, right });
+		}
+	}
+
+	// Re-pair the lines between anchors by similarity (see align.ts). Anchors are the section
+	// sentinels and equal lines with words in them. Equal blank lines are not anchors: they can
+	// match across an edit and split a paragraph from its edited version.
+	const ops: AlignOp[] = [];
+	let region: LineEntry[] = [];
+	for (const entry of entries) {
+		const isAnchor =
+			entry.type === "equal" &&
+			(entry.left === null || !isWeakLine(leftLines[entry.left - 1] ?? ""));
+		if (!isAnchor) {
+			region.push(entry);
+			continue;
+		}
+		ops.push(...alignRegion(region, leftLines, rightLines));
+		region = [];
+		if (entry.left !== null && entry.right !== null) {
+			ops.push({ type: "equal", left: entry.left, right: entry.right });
+		}
+	}
+	ops.push(...alignRegion(region, leftLines, rightLines));
+
 	const leftDecorations: DiffLineDecoration[] = [];
 	const rightDecorations: DiffLineDecoration[] = [];
 	const leftMarks: DiffMarkDecoration[] = [];
 	const rightMarks: DiffMarkDecoration[] = [];
 	const hunks: DiffHunk[] = [];
-
-	let augLi = 0;
-	let augRi = 0;
-	// Original lines consumed so far on each side (sentinels excluded): a pending
-	// block starts right after the lines consumed before it.
-	let consumedLeft = 0;
-	let consumedRight = 0;
-	let pendingDeletes: number[] = [];
-	let pendingInserts: number[] = [];
 
 	const leftHeadings = extractHeadings(leftText, leftSyntax);
 	const rightHeadings = extractHeadings(rightText, rightSyntax);
@@ -136,13 +167,33 @@ export function computeHighlights(
 		return raw.replace(/\t/g, "    ").slice(0, 80);
 	};
 
-	// One hunk per block of consecutive differing lines. leftStart/rightStart say where the
-	// block sits on each side, also on a side where it has no lines (where it would go).
-	const flush = () => {
-		const leftCount = pendingDeletes.length;
-		const rightCount = pendingInserts.length;
-		if (leftCount === 0 && rightCount === 0) return;
+	const markChangedPair = (leftLineNo: number, rightLineNo: number) => {
+		leftDecorations.push({ line: leftLineNo, className: CHANGED_CLASS });
+		rightDecorations.push({ line: rightLineNo, className: CHANGED_CLASS });
 
+		const { left: leftRanges, right: rightRanges } = diffCharRanges(
+			leftLines[leftLineNo - 1] ?? "",
+			rightLines[rightLineNo - 1] ?? "",
+		);
+		for (const [from, to] of leftRanges) {
+			leftMarks.push({ line: leftLineNo, from, to, className: REMOVED_CHAR_CLASS });
+		}
+		for (const [from, to] of rightRanges) {
+			rightMarks.push({ line: rightLineNo, from, to, className: ADDED_CHAR_CLASS });
+		}
+	};
+
+	// One hunk per run of differing lines: a run of lines paired as edits of each other, or a
+	// run of lines without a partner on the other side. leftStart/rightStart say where the run
+	// sits on each side, also on a side where it has no lines (where they would go).
+	let consumedLeft = 0;
+	let consumedRight = 0;
+	let run: { paired: boolean; left: number[]; right: number[] } | null = null;
+
+	const flush = () => {
+		if (!run) return;
+		const leftCount = run.left.length;
+		const rightCount = run.right.length;
 		const leftStart = consumedLeft - leftCount + 1;
 		const rightStart = consumedRight - rightCount + 1;
 		const kind: DiffHunk["kind"] =
@@ -158,81 +209,44 @@ export function computeHighlights(
 			leftStart,
 			rightStart,
 			preview: getPreview(kind, leftLine, rightLine),
-			// A side without lines takes the heading of the line above the block.
+			// A side without lines takes the heading of the line above the run.
 			leftHeader: headingLabelAt(leftHeadings, Math.max(1, leftLine ?? leftStart - 1)),
 			rightHeader: headingLabelAt(rightHeadings, Math.max(1, rightLine ?? rightStart - 1)),
 		});
 
-		const pairCount = Math.min(leftCount, rightCount);
-
-		for (let i = 0; i < pairCount; i++) {
-			const leftLineNo = pendingDeletes[i];
-			const rightLineNo = pendingInserts[i];
-			if (leftLineNo == null || rightLineNo == null) continue;
-
-			leftDecorations.push({ line: leftLineNo, className: CHANGED_CLASS });
-			rightDecorations.push({ line: rightLineNo, className: CHANGED_CLASS });
-
-			const leftLineText = leftLines[leftLineNo - 1] ?? "";
-			const rightLineText = rightLines[rightLineNo - 1] ?? "";
-			const { left: leftRanges, right: rightRanges } = diffCharRanges(
-				leftLineText,
-				rightLineText,
-			);
-
-			for (const [from, to] of leftRanges) {
-				leftMarks.push({ line: leftLineNo, from, to, className: REMOVED_CHAR_CLASS });
-			}
-			for (const [from, to] of rightRanges) {
-				rightMarks.push({ line: rightLineNo, from, to, className: ADDED_CHAR_CLASS });
-			}
+		// Paired lines, and one line replaced by one line, get character marks; other replaced
+		// lines show as removed on the left and added on the right.
+		if (run.paired || (leftCount === 1 && rightCount === 1)) {
+			run.left.forEach((leftLineNo, i) => {
+				const rightLineNo = run?.right[i];
+				if (rightLineNo != null) markChangedPair(leftLineNo, rightLineNo);
+			});
+		} else {
+			for (const line of run.left) leftDecorations.push({ line, className: REMOVED_CLASS });
+			for (const line of run.right) rightDecorations.push({ line, className: ADDED_CLASS });
 		}
-
-		for (const line of pendingDeletes.slice(pairCount)) {
-			leftDecorations.push({ line, className: REMOVED_CLASS });
-		}
-		for (const line of pendingInserts.slice(pairCount)) {
-			rightDecorations.push({ line, className: ADDED_CLASS });
-		}
-
-		pendingDeletes = [];
-		pendingInserts = [];
+		run = null;
 	};
 
-	for (const edit of edits) {
-		switch (edit.type) {
-			case "equal": {
-				flush();
-				const origLeft = leftLineOf[augLi] ?? null;
-				const origRight = rightLineOf[augRi] ?? null;
-				augLi++;
-				augRi++;
-				// Count after flush; skip sentinels (null entries).
-				if (origLeft !== null) consumedLeft++;
-				if (origRight !== null) consumedRight++;
-				break;
-			}
-			case "delete": {
-				const origLeft = leftLineOf[augLi] ?? null;
-				augLi++;
-				if (origLeft !== null) {
-					pendingDeletes.push(origLeft);
-					consumedLeft++;
-				}
-				break;
-			}
-			case "insert": {
-				const origRight = rightLineOf[augRi] ?? null;
-				augRi++;
-				if (origRight !== null) {
-					pendingInserts.push(origRight);
-					consumedRight++;
-				}
-				break;
-			}
+	for (const op of ops) {
+		if (op.type === "equal") {
+			flush();
+			consumedLeft++;
+			consumedRight++;
+			continue;
+		}
+		const paired = op.type === "changed";
+		if (run && run.paired !== paired) flush();
+		run ??= { paired, left: [], right: [] };
+		if (op.type !== "insert") {
+			run.left.push(op.left);
+			consumedLeft++;
+		}
+		if (op.type !== "delete") {
+			run.right.push(op.right);
+			consumedRight++;
 		}
 	}
-
 	flush();
 
 	return {
@@ -240,6 +254,57 @@ export function computeHighlights(
 		right: { lines: rightDecorations, marks: rightMarks },
 		hunks,
 	};
+}
+
+/** A line of the line diff, as 1-based original line numbers (null on the side it is missing). */
+type LineEntry = { type: "equal" | "delete" | "insert"; left: number | null; right: number | null };
+
+/** Pair the lines between two anchors (see align.ts), as 1-based line numbers. */
+function alignRegion(region: LineEntry[], leftLines: string[], rightLines: string[]): AlignOp[] {
+	const leftNumbers = region.flatMap((entry) => (entry.left === null ? [] : [entry.left]));
+	const rightNumbers = region.flatMap((entry) => (entry.right === null ? [] : [entry.right]));
+	if (region.every((entry) => entry.type === "equal")) {
+		return leftNumbers.map((left, i) => ({ type: "equal", left, right: rightNumbers[i] ?? left }));
+	}
+
+	const aligned = alignLines(
+		leftNumbers.map((line) => leftLines[line - 1] ?? ""),
+		rightNumbers.map((line) => rightLines[line - 1] ?? ""),
+	);
+	if (!aligned) return pairByPosition(region);
+
+	return aligned.map((op): AlignOp => {
+		if (op.type === "delete") return { type: "delete", left: leftNumbers[op.left] ?? 0 };
+		if (op.type === "insert") return { type: "insert", right: rightNumbers[op.right] ?? 0 };
+		return { type: op.type, left: leftNumbers[op.left] ?? 0, right: rightNumbers[op.right] ?? 0 };
+	});
+}
+
+/** Too long to align: keep the line diff and pair each run of removed and added lines by position. */
+function pairByPosition(region: LineEntry[]): AlignOp[] {
+	const ops: AlignOp[] = [];
+	let deleted: number[] = [];
+	let inserted: number[] = [];
+	const flushRun = () => {
+		const pairs = Math.min(deleted.length, inserted.length);
+		for (let i = 0; i < pairs; i++) {
+			ops.push({ type: "changed", left: deleted[i] ?? 0, right: inserted[i] ?? 0 });
+		}
+		for (const left of deleted.slice(pairs)) ops.push({ type: "delete", left });
+		for (const right of inserted.slice(pairs)) ops.push({ type: "insert", right });
+		deleted = [];
+		inserted = [];
+	};
+	for (const entry of region) {
+		if (entry.type === "delete" && entry.left !== null) deleted.push(entry.left);
+		else if (entry.type === "insert" && entry.right !== null) inserted.push(entry.right);
+		else if (entry.left !== null && entry.right !== null) {
+			flushRun();
+			ops.push({ type: "equal", left: entry.left, right: entry.right });
+		}
+	}
+	flushRun();
+	return ops;
 }
 
 function diffCharRanges(left: string, right: string) {

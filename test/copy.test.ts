@@ -29,6 +29,10 @@ const pairs: Array<[string, string]> = [
 	["only left", ""],
 	["a\nb\nc\n", "a\nx\ny\nz\nc\n"],
 	["# A\nalpha\n# B\nbeta\nend", "# A\nbeta\n# B\nalpha\nmore\nend"],
+	[
+		"# T\n\nIntro text here.\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\nAliquam lorem ipsum dolor sit amet ut nisi.\n\n- x",
+		"# T\n\nIntro text here.\n\nAliquam lorem ipsum dolor sit amet urttt nisi.\n\n- x\n- y",
+	],
 ];
 
 describe("copying differences", () => {
@@ -54,6 +58,14 @@ describe("copying differences", () => {
 		const [first] = computeHighlights(left, right).hunks;
 		expect(first).toMatchObject({ kind: "changed", leftStart: 2, rightStart: 2 });
 		expect(copyHunk(left, right, first!, "left").right).toBe("a\nB\nc\nd\ne");
+	});
+
+	it("copies an added table in front of the paragraph it came before", () => {
+		const left = "Intro.\n\n| a | b |\n| - | - |\n\nSame paragraph with words.";
+		const right = "Intro.\n\nSame paragraph with words.";
+		const [table] = computeHighlights(left, right).hunks;
+		expect(table).toMatchObject({ kind: "removed", leftCount: 3, rightCount: 0 });
+		expect(copyHunk(left, right, table!, "left").right).toBe(left);
 	});
 
 	it("puts lines missing on one side where they belong", () => {

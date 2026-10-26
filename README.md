@@ -20,6 +20,7 @@ A comparison stays with its two tabs. You can open other notes, split panes or u
 - Lines only in the left note are red, lines only in the right note are green, and changed lines are yellow with the changed characters marked.
 - Left and right are where the notes sit on screen (top and bottom in a horizontal split), so the colours stay the same wherever you click.
 - Headings that appear in both notes anchor the comparison: text is only matched within the same section, and scrolling one note keeps the same section in view in the other.
+- An edited paragraph is found again even when text was added or removed around it, such as a new table above it: lines with at least half of their words in common are paired, so only the changed words are marked, and the added lines show on their own.
 - The **Compare** panel in the right sidebar lists the differences under their headings, one row for each run of consecutive changed lines. Click a difference to jump to it in both notes, or a file name to reveal the file in the file explorer.
 
 ## Copy a difference to the other note
@@ -44,7 +45,7 @@ Any file that Obsidian opens in its editor can be compared, for example `.tex` f
 
 ## Good to know
 
-- Highlights show in Source mode and Live Preview. Reading view is not highlighted.
+- Highlights show in Source mode and Live Preview. Reading view is not highlighted. In Live Preview, Obsidian draws tables, callouts and embeds as one block, so their lines are not coloured; switch to Source mode to see them, and the panel lists them either way.
 - The plugin changes a note only when you copy a difference into it. That is an ordinary edit, saved like typing. Highlights disappear when the comparison ends.
 - It makes no network requests.
 
