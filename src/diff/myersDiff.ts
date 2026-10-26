@@ -12,6 +12,10 @@ function getOrDefault(
 	return value === undefined ? defaultValue : value;
 }
 
+/**
+ * The shortest edit script from `a` to `b`, by Eugene W. Myers' O(ND) difference algorithm
+ * ("An O(ND) Difference Algorithm and Its Variations", Algorithmica 1, 1986).
+ */
 export function diffMyers<T>(
 	a: readonly T[],
 	b: readonly T[],
