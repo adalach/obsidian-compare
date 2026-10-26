@@ -1,12 +1,8 @@
+import { extractHeadings, type Heading, type HeadingSyntax } from "../headings/headings";
+
 export interface HeadingAnchor {
 	leftLine: number;
 	rightLine: number;
-}
-
-interface Heading {
-	level: number;
-	text: string;
-	line: number;
 }
 
 interface Section {
@@ -14,39 +10,6 @@ interface Section {
 	text: string;
 	line: number;
 	children: Section[];
-}
-
-/**
- * Extract headings from document text, skipping headings inside fenced code blocks.
- * Returns 1-based line numbers.
- */
-function extractHeadings(docText: string): Heading[] {
-	const headings: Heading[] = [];
-	const lines = docText.split("\n");
-	let fenceChar: string | null = null;
-
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i] ?? "";
-		const trimmed = line.trimStart();
-
-		if (fenceChar === null) {
-			if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
-				fenceChar = trimmed[0] ?? null;
-				continue;
-			}
-			const m = line.match(/^(#{1,6})\s+(.+)/);
-			if (m) {
-				headings.push({ level: m[1]!.length, text: m[2]!.trim(), line: i + 1 });
-			}
-		} else {
-			// Close the fence only when we see 3+ of the same fence character at line start
-			if (trimmed.startsWith(fenceChar.repeat(3))) {
-				fenceChar = null;
-			}
-		}
-	}
-
-	return headings;
 }
 
 /**
@@ -104,15 +67,18 @@ function matchSectionsRecursive(
 
 /**
  * Compute heading anchors: pairs of (leftLine, rightLine) where the same
- * heading appears in both documents, matched hierarchically by text.
+ * heading appears in both documents, matched hierarchically by text. Each side
+ * is read with its own syntax, so a Markdown note can be matched to a LaTeX file.
  * The returned list is sorted ascending by leftLine.
  */
 export function computeHeadingAnchors(
 	leftDocText: string,
 	rightDocText: string,
+	leftSyntax: HeadingSyntax = "markdown",
+	rightSyntax: HeadingSyntax = "markdown",
 ): HeadingAnchor[] {
-	const leftTree = buildSectionTree(extractHeadings(leftDocText));
-	const rightTree = buildSectionTree(extractHeadings(rightDocText));
+	const leftTree = buildSectionTree(extractHeadings(leftDocText, leftSyntax));
+	const rightTree = buildSectionTree(extractHeadings(rightDocText, rightSyntax));
 
 	const anchors: HeadingAnchor[] = [];
 	matchSectionsRecursive(leftTree, rightTree, anchors);

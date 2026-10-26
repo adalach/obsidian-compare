@@ -36,7 +36,7 @@ export class MarkdownCompareDiffView extends ItemView {
 	}
 
 	getDisplayText() {
-		return "Markdown compare";
+		return "Compare";
 	}
 
 	getIcon() {
@@ -62,7 +62,7 @@ export class MarkdownCompareDiffView extends ItemView {
 
 		const header = contentEl.createDiv({ cls: "markdowncompare-diffview-header" });
 		header.createDiv({
-			text: "Markdown compare",
+			text: "Compare",
 			cls: "markdowncompare-diffview-title",
 		});
 

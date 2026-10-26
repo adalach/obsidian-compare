@@ -1,4 +1,4 @@
-# MarkdownCompare (Obsidian community plugin)
+# Compare (Obsidian community plugin)
 
 ## Project overview
 

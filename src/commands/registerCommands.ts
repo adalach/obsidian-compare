@@ -4,14 +4,14 @@ import { getCurrentNoteLeaf } from "../compare/panes";
 
 export function registerMarkdownCompareCommands(plugin: MarkdownComparePlugin) {
 	plugin.addCommand({
-		id: "compare-two-files",
-		name: "Compare two notes",
+		id: "two-notes",
+		name: "Two notes",
 		callback: () => compareNotes(plugin, { showNotice: true }),
 	});
 
 	plugin.addCommand({
-		id: "compare-with",
-		name: "Compare current note with…",
+		id: "current-note-with",
+		name: "Current note with…",
 		checkCallback: (checking) => {
 			const leaf = getCurrentNoteLeaf(plugin.app);
 			if (!leaf) return false;
@@ -21,14 +21,14 @@ export function registerMarkdownCompareCommands(plugin: MarkdownComparePlugin) {
 	});
 
 	plugin.addCommand({
-		id: "clear-highlights",
+		id: "stop",
 		name: "Stop comparing",
 		callback: () => plugin.stopComparing(),
 	});
 
 	plugin.addCommand({
-		id: "toggle-live-compare",
-		name: "Toggle live compare",
+		id: "toggle-live",
+		name: "Toggle live updates",
 		callback: () => plugin.toggleLiveCompare(),
 	});
 }

@@ -4,6 +4,7 @@ import { MARKDOWNCOMPARE_DIFF_VIEW_TYPE } from "./ui/constants";
 import { registerMarkdownCompareCommands } from "./commands/registerCommands";
 import { registerMarkdownCompareMenus } from "./commands/registerMenus";
 import { diffHighlightExtension } from "./editor/diffHighlight";
+import { headingSyntaxFor } from "./headings/headings";
 import {
 	checkComparison,
 	compareNotes,
@@ -80,17 +81,17 @@ export default class MarkdownComparePlugin extends Plugin {
 		this.clearJumpTimeoutId = null;
 	}
 
-	/** Live compare updates the highlights while you edit either note of the comparison. */
+	/** Live updates refresh the highlights while you edit either note of the comparison. */
 	toggleLiveCompare() {
 		if (this.liveCompare) {
 			this.stopComparing();
-			new Notice("Live compare off.");
+			new Notice("Live updates off.");
 			return;
 		}
 
 		this.liveCompare = true;
 		this.updateStatusBar();
-		new Notice("Live compare on.");
+		new Notice("Live updates on.");
 		if (this.comparePair) refreshComparison(this);
 		else compareNotes(this);
 	}
@@ -108,11 +109,11 @@ export default class MarkdownComparePlugin extends Plugin {
 		this.statusBarToggleEl.toggleClass("is-active", on);
 		this.statusBarToggleEl.setAttr(
 			"aria-label",
-			on ? "Live compare on" : "Live compare off",
+			on ? "Live updates on" : "Live updates off",
 		);
 		this.statusBarToggleEl.setAttr(
 			"title",
-			on ? "Live compare on" : "Live compare off",
+			on ? "Live updates on" : "Live updates off",
 		);
 	}
 
@@ -161,6 +162,8 @@ export default class MarkdownComparePlugin extends Plugin {
 		this.stopScrollSync = startScrollSync(
 			targets.leftEditorView,
 			targets.rightEditorView,
+			headingSyntaxFor(targets.leftPath),
+			headingSyntaxFor(targets.rightPath),
 		);
 	}
 

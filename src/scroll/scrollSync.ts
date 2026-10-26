@@ -1,6 +1,7 @@
 import type { EditorView } from "@codemirror/view";
 import { EditorView as EditorViewNS } from "@codemirror/view";
 import { computeHeadingAnchors, mapLineWithAnchors, type HeadingAnchor } from "./headingAnchors";
+import type { HeadingSyntax } from "../headings/headings";
 
 export interface CompareTargets {
 	leftEditorView: EditorView;
@@ -28,7 +29,12 @@ export function scrollBothEditorsToLines(
 	scrollEditorToLine(right, rightLine);
 }
 
-export function startScrollSync(left: EditorView, right: EditorView) {
+export function startScrollSync(
+	left: EditorView,
+	right: EditorView,
+	leftSyntax: HeadingSyntax,
+	rightSyntax: HeadingSyntax,
+) {
 	let syncing = false;
 	let rafId: number | null = null;
 	let pending: { source: EditorView } | null = null;
@@ -44,7 +50,12 @@ export function startScrollSync(left: EditorView, right: EditorView) {
 		if (leftDoc !== cachedLeftDoc || rightDoc !== cachedRightDoc) {
 			cachedLeftDoc = leftDoc;
 			cachedRightDoc = rightDoc;
-			cachedAnchors = computeHeadingAnchors(leftDoc.toString(), rightDoc.toString());
+			cachedAnchors = computeHeadingAnchors(
+				leftDoc.toString(),
+				rightDoc.toString(),
+				leftSyntax,
+				rightSyntax,
+			);
 		}
 		return cachedAnchors;
 	};

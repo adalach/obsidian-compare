@@ -1,8 +1,8 @@
 {
-	"name": "markdown-compare",
+	"name": "compare",
 	"version": "1.1.0",
 	"private": true,
-	"description": "Compare two notes side by side in Obsidian and highlight their differences.",
+	"description": "Compare two notes or LaTeX files side by side in Obsidian and highlight their differences.",
 	"author": "Agata Dalach",
 	"license": "MIT",
 	"main": "main.js",

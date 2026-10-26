@@ -1,30 +1,38 @@
-# MarkdownCompare
+# Compare
 
-Compare two notes side by side, right in the editor. Changed lines and the exact changed characters are highlighted in both notes while you keep writing, sections are matched by their headings, and both notes scroll together.
+Compare two notes side by side, right in the editor. Changed lines and the exact changed characters are highlighted in both notes while you keep writing, sections are matched by their headings, and both notes scroll together. LaTeX files are matched by their `\section{…}` commands.
 
-![MarkdownCompare highlighting the differences between two notes](assets/markdowncompare-preview.webp)
+![Compare highlighting the differences between two notes](assets/markdowncompare-preview.webp)
 
 ## Start a comparison
 
-- **Two notes open side by side:** run **MarkdownCompare: Compare two notes** from the command palette. They are compared straight away.
-- **Any other layout:** the same command, or **Compare current note with…**, asks which note to compare the current one with. Notes open in tabs come first, then recently opened ones. A note that is not on screen opens in a split to the right.
+- **Two notes open side by side:** run **Compare: Two notes** from the command palette. They are compared straight away.
+- **Any other layout:** the same command, or **Compare: Current note with…**, asks which note to compare the current one with. Notes open in tabs come first, then recently opened ones. A note that is not on screen opens in a split to the right.
 - **From a menu:**
   - Right-click a note in the file explorer, a link or a search result, and choose **Compare with *current note***.
   - Right-click a tab and choose **Compare with…**.
   - Select two notes in the file explorer, right-click and choose **Compare the two notes**.
 
-A comparison stays with its two tabs. You can open other notes, split panes or use the sidebars, and it keeps going. It ends when you close either tab, open another note in it, or run **Stop comparing**.
+A comparison stays with its two tabs. You can open other notes, split panes or use the sidebars, and it keeps going. It ends when you close either tab, open another note in it, or run **Compare: Stop comparing**.
 
 ## What you see
 
 - Lines only in the left note are red, lines only in the right note are green, and changed lines are yellow with the changed characters marked.
 - Left and right are where the notes sit on screen (top and bottom in a horizontal split), so the colours stay the same wherever you click.
 - Headings that appear in both notes anchor the comparison: text is only matched within the same section, and scrolling one note keeps the same section in view in the other.
-- The **Markdown compare** panel in the right sidebar lists the differences under their headings. Click a difference to jump to it in both notes, or a file name to reveal the note in the file explorer.
+- The **Compare** panel in the right sidebar lists the differences under their headings. Click a difference to jump to it in both notes, or a file name to reveal the file in the file explorer.
 
-## Live compare
+## LaTeX and other text files
 
-**Toggle live compare**, or the scale icon in the status bar on desktop, keeps the highlights up to date while you edit either note. It stays on for later comparisons until you turn it off or run **Stop comparing**.
+Any file that Obsidian opens in its editor can be compared, for example `.tex` files when a plugin such as Custom File Extensions opens them as text.
+
+- In `.tex` files the sections are `\part`, `\chapter`, `\section`, `\subsection`, `\subsubsection`, `\paragraph` and `\subparagraph`. Commands in `%` comments and in `verbatim`, `lstlisting`, `minted` or `comment` environments are ignored.
+- A Markdown note and a `.tex` file can be compared too: a `# Methods` heading matches `\section{Methods}`.
+- Other files are compared line by line, without sections.
+
+## Live updates
+
+**Compare: Toggle live updates**, or the scale icon in the status bar on desktop, keeps the highlights up to date while you edit either note. It stays on for later comparisons until you turn it off or run **Stop comparing**.
 
 ## Good to know
 
@@ -34,6 +42,6 @@ A comparison stays with its two tabs. You can open other notes, split panes or u
 
 ## Install
 
-In Obsidian, open **Settings → Community plugins → Browse**, search for **MarkdownCompare**, install it and turn it on.
+In Obsidian, open **Settings → Community plugins → Browse**, search for **Compare**, install it and turn it on.
 
-To install by hand, download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/adalach/obsidian-markdown-compare/releases/latest) into `<vault>/.obsidian/plugins/markdown-compare/`, then turn the plugin on under **Settings → Community plugins**.
+To install by hand, download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/adalach/obsidian-markdown-compare/releases/latest) into `<vault>/.obsidian/plugins/compare/`, then turn the plugin on under **Settings → Community plugins**.

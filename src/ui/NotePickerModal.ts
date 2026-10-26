@@ -1,11 +1,14 @@
 import { FuzzySuggestModal, renderResults, type App, type FuzzyMatch, type TFile } from "obsidian";
-import { getOpenNoteFiles } from "../compare/panes";
+import { getEditorFiles, getOpenNoteFiles } from "../compare/panes";
 
 function getDisplayPath(file: TFile) {
 	return file.extension === "md" ? file.path.slice(0, -3) : file.path;
 }
 
-/** Pick the note to compare with: notes open in tabs first, then recent notes, then the rest by last edit. */
+/**
+ * Pick the note or file to compare with: files open in tabs first, then recent ones, then the rest
+ * by last edit. Lists every file Obsidian opens in its editor, such as `.tex` files.
+ */
 export class NotePickerModal extends FuzzySuggestModal<TFile> {
 	private readonly baseFile: TFile;
 	private readonly onPick: (file: TFile) => void;
@@ -25,7 +28,7 @@ export class NotePickerModal extends FuzzySuggestModal<TFile> {
 	}
 
 	getItems(): TFile[] {
-		const notes = this.app.vault.getMarkdownFiles().filter((file) => file !== this.baseFile);
+		const notes = getEditorFiles(this.app).filter((file) => file !== this.baseFile);
 		const recentPaths = this.app.workspace.getLastOpenFiles();
 		const rank = (file: TFile) => {
 			if (this.openFiles.has(file)) return 0;

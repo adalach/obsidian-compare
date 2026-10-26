@@ -1,2 +1,2 @@
-export const MARKDOWNCOMPARE_DIFF_VIEW_TYPE = "markdowncompare-diff-view";
+export const MARKDOWNCOMPARE_DIFF_VIEW_TYPE = "compare-diff-view";
 

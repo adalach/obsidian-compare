@@ -1,18 +1,13 @@
-import { TFile } from "obsidian";
 import type MarkdownComparePlugin from "../main";
 import { compareFiles, compareLeafWithFile, pickNoteToCompare } from "../compare/comparison";
-import { getCurrentNoteLeaf, getNoteView } from "../compare/panes";
-
-function isNote(file: unknown): file is TFile {
-	return file instanceof TFile && file.extension === "md";
-}
+import { getCurrentNoteLeaf, getNoteView, opensInEditor } from "../compare/panes";
 
 export function registerMarkdownCompareMenus(plugin: MarkdownComparePlugin) {
 	// A note's menu (file explorer, links, search results, tab header): compare it with the
 	// current note, or pick the note to compare with when it is the current note or its tab.
 	plugin.registerEvent(
 		plugin.app.workspace.on("file-menu", (menu, file, _source, leaf) => {
-			if (!isNote(file)) return;
+			if (!opensInEditor(plugin.app, file)) return;
 
 			const tabLeaf = leaf && getNoteView(leaf)?.file === file ? leaf : null;
 			const currentLeaf = getCurrentNoteLeaf(plugin.app);
@@ -39,11 +34,13 @@ export function registerMarkdownCompareMenus(plugin: MarkdownComparePlugin) {
 		}),
 	);
 
-	// Two notes selected in the file explorer.
+	// Two notes or files selected in the file explorer.
 	plugin.registerEvent(
 		plugin.app.workspace.on("files-menu", (menu, files) => {
 			const [first, second] = files;
-			if (files.length !== 2 || !isNote(first) || !isNote(second)) return;
+			if (files.length !== 2 || !opensInEditor(plugin.app, first) || !opensInEditor(plugin.app, second)) {
+				return;
+			}
 			menu.addItem((item) =>
 				item
 					.setTitle("Compare the two notes")

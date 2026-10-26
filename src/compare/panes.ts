@@ -1,4 +1,28 @@
-import { MarkdownView, TFile, WorkspaceSidedock, type App, type WorkspaceLeaf } from "obsidian";
+import {
+	MarkdownView,
+	TFile,
+	WorkspaceSidedock,
+	type App,
+	type TAbstractFile,
+	type WorkspaceLeaf,
+} from "obsidian";
+
+type ViewRegistry = { getTypeByExtension?: (extension: string) => string | undefined };
+
+/**
+ * Whether Obsidian opens the file in its editor: Markdown notes, and files such as `.tex`
+ * that another plugin registered for the editor. Obsidian has no public API for this lookup.
+ */
+export function opensInEditor(app: App, file: TAbstractFile | null | undefined): file is TFile {
+	if (!(file instanceof TFile)) return false;
+	if (file.extension === "md") return true;
+	const viewRegistry = (app as unknown as { viewRegistry?: ViewRegistry }).viewRegistry;
+	return viewRegistry?.getTypeByExtension?.(file.extension) === "markdown";
+}
+
+export function getEditorFiles(app: App) {
+	return app.vault.getFiles().filter((file) => opensInEditor(app, file));
+}
 
 export function getNoteView(leaf: WorkspaceLeaf): MarkdownView | null {
 	const view = leaf.view;

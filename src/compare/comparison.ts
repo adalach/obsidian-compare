@@ -6,6 +6,7 @@ import {
 	setDiffHighlights,
 } from "../editor/diffHighlight";
 import { computeHighlights } from "../diff/highlights";
+import { headingSyntaxFor } from "../headings/headings";
 import { NotePickerModal } from "../ui/NotePickerModal";
 import {
 	getCurrentNoteLeaf,
@@ -112,6 +113,8 @@ export function refreshComparison(plugin: MarkdownComparePlugin, options?: Compa
 	const { left, right, hunks } = computeHighlights(
 		leftView.editor.getValue(),
 		rightView.editor.getValue(),
+		headingSyntaxFor(pair.leftFile.path),
+		headingSyntaxFor(pair.rightFile.path),
 	);
 
 	setDiffHighlights(leftEditorView, left);

@@ -14,7 +14,7 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = (process.argv[2] === "production");
 
-const configuredVaultPluginDir = process.env.MARKDOWNCOMPARE_PLUGIN_DIR;
+const configuredVaultPluginDir = process.env.COMPARE_PLUGIN_DIR;
 const defaultVaultPluginDir = process.env.HOME
 	? path.join(
 			process.env.HOME,
@@ -22,7 +22,7 @@ const defaultVaultPluginDir = process.env.HOME
 			"Obsidian Vault",
 			".obsidian",
 			"plugins",
-			"markdown-compare",
+			"compare",
 		)
 	: null;
 
@@ -47,7 +47,7 @@ const syncVaultPlugin = {
 			try {
 				await syncToVaultPluginDir();
 			} catch (error) {
-				console.warn("[MarkdownCompare] Failed to sync build artifacts:", error);
+				console.warn("[Compare] Failed to sync build artifacts:", error);
 			}
 		});
 	},

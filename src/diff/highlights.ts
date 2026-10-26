@@ -7,6 +7,7 @@ import { diffLinesMyers } from "./myersLineDiff";
 import { diffMyers } from "./myersDiff";
 import type { DiffHunk } from "../ui/DiffView";
 import { computeHeadingAnchors, type HeadingAnchor } from "../scroll/headingAnchors";
+import { extractHeadings, headingLabelAt, type HeadingSyntax } from "../headings/headings";
 
 const ADDED_CLASS = "markdowncompare-diff-added";
 const REMOVED_CLASS = "markdowncompare-diff-removed";
@@ -39,6 +40,8 @@ function filterMonotoneAnchors(anchors: HeadingAnchor[]): HeadingAnchor[] {
 export function computeHighlights(
 	leftText: string,
 	rightText: string,
+	leftSyntax: HeadingSyntax = "markdown",
+	rightSyntax: HeadingSyntax = "markdown",
 ): { left: DiffHighlightSpec; right: DiffHighlightSpec; hunks: DiffHunk[] } {
 	const leftLines = splitLines(leftText);
 	const rightLines = splitLines(rightText);
@@ -48,7 +51,9 @@ export function computeHighlights(
 	// each matched heading in both augmented arrays. Because sentinels are unique,
 	// Myers must treat them as "equal", effectively locking the alignment at each
 	// matched heading and confining the diff to content within the same section.
-	const anchors = filterMonotoneAnchors(computeHeadingAnchors(leftText, rightText));
+	const anchors = filterMonotoneAnchors(
+		computeHeadingAnchors(leftText, rightText, leftSyntax, rightSyntax),
+	);
 
 	const augLeft: string[] = [];
 	const augRight: string[] = [];
@@ -116,18 +121,8 @@ export function computeHighlights(
 	let pendingDeletes: number[] = [];
 	let pendingInserts: number[] = [];
 
-	const getHeaderForLine = (lines: string[], line: number) => {
-		const clamped = Math.max(1, Math.min(line, lines.length));
-		for (let i = clamped; i >= 1; i--) {
-			const raw = lines[i - 1] ?? "";
-			const match = raw.match(/^(#{1,6})\s+(.*)$/);
-			if (!match) continue;
-			const level = match[1] ?? "";
-			const text = (match[2] ?? "").trim();
-			return `${level} ${text}`.trim();
-		}
-		return null;
-	};
+	const leftHeadings = extractHeadings(leftText, leftSyntax);
+	const rightHeadings = extractHeadings(rightText, rightSyntax);
 
 	const getPreview = (kind: DiffHunk["kind"], leftLineN: number | null, rightLineN: number | null) => {
 		const raw =
@@ -153,8 +148,8 @@ export function computeHighlights(
 				leftCount: pendingDeletes.length,
 				rightCount: pendingInserts.length,
 				preview: getPreview("changed", leftStart, rightStart),
-				leftHeader: getHeaderForLine(leftLines, leftContextLine),
-				rightHeader: getHeaderForLine(rightLines, rightContextLine),
+				leftHeader: headingLabelAt(leftHeadings, leftContextLine),
+				rightHeader: headingLabelAt(rightHeadings, rightContextLine),
 			});
 
 			const pairCount = Math.min(pendingDeletes.length, pendingInserts.length);
@@ -191,8 +186,8 @@ export function computeHighlights(
 					leftCount: 1,
 					rightCount: 0,
 					preview: getPreview("removed", line, null),
-					leftHeader: getHeaderForLine(leftLines, line),
-					rightHeader: getHeaderForLine(rightLines, Math.max(1, ctxRight)),
+					leftHeader: headingLabelAt(leftHeadings, line),
+					rightHeader: headingLabelAt(rightHeadings, Math.max(1, ctxRight)),
 				});
 			}
 			for (const line of pendingInserts.slice(pairCount)) {
@@ -204,8 +199,8 @@ export function computeHighlights(
 					leftCount: 0,
 					rightCount: 1,
 					preview: getPreview("added", null, line),
-					leftHeader: getHeaderForLine(leftLines, Math.max(1, ctxLeft)),
-					rightHeader: getHeaderForLine(rightLines, line),
+					leftHeader: headingLabelAt(leftHeadings, Math.max(1, ctxLeft)),
+					rightHeader: headingLabelAt(rightHeadings, line),
 				});
 			}
 		} else if (pendingDeletes.length > 0) {
@@ -219,8 +214,8 @@ export function computeHighlights(
 				leftCount: pendingDeletes.length,
 				rightCount: 0,
 				preview: getPreview("removed", leftStart, null),
-				leftHeader: getHeaderForLine(leftLines, leftContextLine),
-				rightHeader: getHeaderForLine(rightLines, rightContextLine),
+				leftHeader: headingLabelAt(leftHeadings, leftContextLine),
+				rightHeader: headingLabelAt(rightHeadings, rightContextLine),
 			});
 			for (const line of pendingDeletes) {
 				leftDecorations.push({ line, className: REMOVED_CLASS });
@@ -236,8 +231,8 @@ export function computeHighlights(
 				leftCount: 0,
 				rightCount: pendingInserts.length,
 				preview: getPreview("added", null, rightStart),
-				leftHeader: getHeaderForLine(leftLines, leftContextLine),
-				rightHeader: getHeaderForLine(rightLines, rightContextLine),
+				leftHeader: headingLabelAt(leftHeadings, leftContextLine),
+				rightHeader: headingLabelAt(rightHeadings, rightContextLine),
 			});
 			for (const line of pendingInserts) {
 				rightDecorations.push({ line, className: ADDED_CLASS });
