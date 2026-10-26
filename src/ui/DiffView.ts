@@ -14,6 +14,8 @@ export interface DiffHunk {
 	/** 1-based first line of the block on each side; on a side without lines, the line it would go before. */
 	leftStart: number;
 	rightStart: number;
+	/** Whether line i on the left is an edited version of line i on the right, with word changes. */
+	paired: boolean;
 	preview: string;
 	leftHeader: string | null;
 	rightHeader: string | null;

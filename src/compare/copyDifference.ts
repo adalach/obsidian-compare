@@ -1,7 +1,8 @@
 import { EditorView, ViewPlugin } from "@codemirror/view";
 import { Platform } from "obsidian";
 import type MarkdownComparePlugin from "../main";
-import { copyBlockEdit } from "../diff/copy";
+import { copyBlockEdit, copyChangeEdit } from "../diff/copy";
+import { wordChanges } from "../diff/words";
 import { BLOCK_CLASSES, findBlockWidgets } from "../editor/blockHighlight";
 import type { DiffHunk } from "../ui/DiffView";
 import { refreshComparison } from "./comparison";
@@ -79,6 +80,61 @@ export function copyDifferenceAt(
 	return true;
 }
 
+/**
+ * The word change at character `ch` of `line` on `side`, when that line is paired with an edited
+ * version of it on the other side. Only a change with words on `side` can be hit.
+ */
+export function findChangeAt(plugin: MarkdownComparePlugin, side: Side, line: number, ch: number) {
+	const pair = plugin.getComparePair();
+	const hunk = findDifferenceAt(plugin, side, line);
+	const leftView = pair ? getNoteView(pair.leftLeaf) : null;
+	const rightView = pair ? getNoteView(pair.rightLeaf) : null;
+	if (!hunk?.paired || !leftView || !rightView) return null;
+
+	const offset = line - (side === "left" ? hunk.leftStart : hunk.rightStart);
+	const leftLine = hunk.leftStart + offset;
+	const rightLine = hunk.rightStart + offset;
+	const leftText = leftView.editor.getLine(leftLine - 1);
+	const rightText = rightView.editor.getLine(rightLine - 1);
+	const change = wordChanges(leftText, rightText).find((c) => {
+		const [from, to] = side === "left" ? [c.leftFrom, c.leftTo] : [c.rightFrom, c.rightTo];
+		return to > from && ch >= from && ch <= to;
+	});
+	if (!change) return null;
+	const otherHasWords = side === "left" ? change.rightTo > change.rightFrom : change.leftTo > change.leftFrom;
+	return { change, leftLine, rightLine, leftText, rightText, leftView, rightView, otherHasWords };
+}
+
+/**
+ * Copy only the word change at `ch` of `line` on `side`, taking the `from` side's words, and put
+ * the cursor after them so Cmd+Z there undoes it. Returns false when no change is there.
+ */
+export function copyChangeAt(
+	plugin: MarkdownComparePlugin,
+	side: Side,
+	line: number,
+	ch: number,
+	from: Side,
+) {
+	refreshComparison(plugin);
+	const found = findChangeAt(plugin, side, line, ch);
+	if (!found) return false;
+
+	const fromLeft = from === "left";
+	const edit = copyChangeEdit(found.leftText, found.rightText, found.change, from);
+	const targetView = fromLeft ? found.rightView : found.leftView;
+	const targetLine = (fromLeft ? found.rightLine : found.leftLine) - 1;
+	targetView.editor.replaceRange(edit.text, { line: targetLine, ch: edit.fromCh }, { line: targetLine, ch: edit.toCh });
+	refreshComparison(plugin);
+
+	const cursor = { line: targetLine, ch: edit.fromCh + edit.text.length };
+	plugin.app.workspace.setActiveLeaf(targetView.leaf, { focus: true });
+	targetView.editor.setCursor(cursor);
+	targetView.editor.scrollIntoView({ from: cursor, to: cursor });
+	plugin.flashLines(found.leftLine, found.rightLine);
+	return true;
+}
+
 // Cmd+click on these keeps its usual meaning (open the link, search the tag).
 const LINK_SELECTOR =
 	"a, .cm-link, .cm-url, .cm-hmd-internal-link, .cm-underline, .cm-hashtag, .internal-link, .external-link, .internal-embed";
@@ -88,30 +144,36 @@ function isModClick(event: MouseEvent) {
 	return Platform.isMacOS ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
 }
 
-function lineAtEvent(view: EditorView, event: MouseEvent) {
+/** The clicked spot as a 1-based line and the character in it. */
+function positionAtEvent(view: EditorView, event: MouseEvent) {
 	const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-	return pos == null ? null : view.state.doc.lineAt(pos).number;
+	if (pos == null) return null;
+	const line = view.state.doc.lineAt(pos);
+	return { line: line.number, ch: pos - line.from };
 }
 
-// A right-click does not move the cursor, so the editor menu asks for the line that was clicked.
-let lastRightClick: { side: Side; line: number; time: number } | null = null;
+// A right-click does not move the cursor, so the editor menu asks for the spot that was clicked.
+let lastRightClick: { side: Side; line: number; ch: number; time: number } | null = null;
 
-/** The line a right-click just hit on `side`, else the cursor's line (menu opened from the keyboard). */
-export function lineForEditorMenu(side: Side, cursorLine: number) {
+/** The spot a right-click just hit on `side`, else the cursor (menu opened from the keyboard). */
+export function positionForEditorMenu(side: Side, cursor: { line: number; ch: number }) {
 	const click = lastRightClick;
 	lastRightClick = null;
-	return click && click.side === side && Date.now() - click.time < 1000 ? click.line : cursorLine;
+	return click && click.side === side && Date.now() - click.time < 1000
+		? { line: click.line, ch: click.ch }
+		: cursor;
 }
 
 /**
- * Cmd+click (Ctrl+click on Windows and Linux) on a highlighted line copies its difference to the
- * other note; a right-click is remembered for the editor menu.
+ * Cmd+click (Ctrl+click on Windows and Linux) on a marked word copies that change to the other
+ * note, and elsewhere on a highlighted line the whole difference; a right-click is remembered
+ * for the editor menu.
  */
 export function copyDifferenceHandlers(plugin: MarkdownComparePlugin) {
 	const rememberRightClick = (event: MouseEvent, view: EditorView) => {
 		const side = sideOf(plugin, view);
-		const line = side ? lineAtEvent(view, event) : null;
-		if (side && line != null) lastRightClick = { side, line, time: Date.now() };
+		const position = side ? positionAtEvent(view, event) : null;
+		if (side && position) lastRightClick = { side, ...position, time: Date.now() };
 		return false;
 	};
 
@@ -124,8 +186,12 @@ export function copyDifferenceHandlers(plugin: MarkdownComparePlugin) {
 				if (!side) return false;
 				if (event.target instanceof Element && event.target.closest(LINK_SELECTOR)) return false;
 
-				const line = lineAtEvent(view, event);
-				if (line == null || !copyDifferenceAt(plugin, side, line, side)) return false;
+				const position = positionAtEvent(view, event);
+				if (!position) return false;
+				const { line, ch } = position;
+				if (!copyChangeAt(plugin, side, line, ch, side) && !copyDifferenceAt(plugin, side, line, side)) {
+					return false;
+				}
 
 				event.preventDefault();
 				return true;

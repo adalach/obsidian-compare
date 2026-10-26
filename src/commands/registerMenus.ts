@@ -2,10 +2,12 @@ import type MarkdownComparePlugin from "../main";
 import { compareFiles, compareLeafWithFile, pickNoteToCompare } from "../compare/comparison";
 import { getCurrentNoteLeaf, getNoteView, opensInEditor } from "../compare/panes";
 import {
+	copyChangeAt,
 	copyDifferenceAt,
+	findChangeAt,
 	findDifferenceAt,
-	lineForEditorMenu,
 	otherSide,
+	positionForEditorMenu,
 	sideOf,
 } from "../compare/copyDifference";
 import { refreshComparison } from "../compare/comparison";
@@ -59,7 +61,8 @@ export function registerMarkdownCompareMenus(plugin: MarkdownComparePlugin) {
 	);
 
 	// Right-click on a difference in either note of the comparison: copy it to the other note, or
-	// take the other note's version (which deletes lines the other note does not have).
+	// take the other note's version (which deletes lines the other note does not have). On a
+	// marked word, the same for just that change.
 	plugin.registerEvent(
 		plugin.app.workspace.on("editor-menu", (menu, editor, info) => {
 			const side = sideOf(plugin, info);
@@ -67,23 +70,53 @@ export function registerMarkdownCompareMenus(plugin: MarkdownComparePlugin) {
 			if (!side || !pair) return;
 
 			refreshComparison(plugin);
-			const line = lineForEditorMenu(side, editor.getCursor().line + 1);
+			const cursor = editor.getCursor();
+			const { line, ch } = positionForEditorMenu(side, { line: cursor.line + 1, ch: cursor.ch });
 			const hunk = findDifferenceAt(plugin, side, line);
 			if (!hunk) return;
 
 			const other = (side === "left" ? pair.rightFile : pair.leftFile).basename;
-			const otherHasLines = (side === "left" ? hunk.rightCount : hunk.leftCount) > 0;
 			const towardsOther = side === "left" ? "arrow-right" : "arrow-left";
 			const towardsThis = side === "left" ? "arrow-left" : "arrow-right";
+
+			const found = findChangeAt(plugin, side, line, ch);
+			if (found) {
+				menu.addItem((item) =>
+					item
+						.setTitle(`Copy this change to ${other}`)
+						.setIcon(towardsOther)
+						.onClick(() => copyChangeAt(plugin, side, line, ch, side)),
+				);
+				menu.addItem((item) =>
+					item
+						.setTitle(
+							found.otherHasWords
+								? `Use ${other}'s version of this change`
+								: `Delete this change (not in ${other})`,
+						)
+						.setIcon(towardsThis)
+						.onClick(() => copyChangeAt(plugin, side, line, ch, otherSide(side))),
+				);
+			}
+
+			// With the single-change items above, these say that they take the whole difference.
+			const whole = found ? "the whole difference " : "";
+			const otherHasLines = (side === "left" ? hunk.rightCount : hunk.leftCount) > 0;
 			menu.addItem((item) =>
 				item
-					.setTitle(`Copy to ${other}`)
+					.setTitle(`Copy ${whole}to ${other}`)
 					.setIcon(towardsOther)
 					.onClick(() => copyDifferenceAt(plugin, side, line, side)),
 			);
 			menu.addItem((item) =>
 				item
-					.setTitle(otherHasLines ? `Use ${other}'s version` : `Delete (not in ${other})`)
+					.setTitle(
+						otherHasLines
+							? found
+								? `Use ${other}'s version of the whole difference`
+								: `Use ${other}'s version`
+							: `Delete (not in ${other})`,
+					)
 					.setIcon(towardsThis)
 					.onClick(() => copyDifferenceAt(plugin, side, line, otherSide(side))),
 			);

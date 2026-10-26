@@ -1,3 +1,5 @@
+import type { WordChange } from "./words";
+
 /** A block of lines on one side of a difference: 1-based first line and line count. */
 export interface LineBlock {
 	start: number;
@@ -56,4 +58,16 @@ export function copyBlockEdit(
 		return { from: endOf(first - 1), to: endOf(last), text: "" };
 	}
 	return { from: { line: 0, ch: 0 }, to: endOf(last), text: "" };
+}
+
+/** The edit within one line that copies a word change from the `from` side over the other side. */
+export function copyChangeEdit(
+	leftLine: string,
+	rightLine: string,
+	change: WordChange,
+	from: "left" | "right",
+) {
+	return from === "left"
+		? { fromCh: change.rightFrom, toCh: change.rightTo, text: leftLine.slice(change.leftFrom, change.leftTo) }
+		: { fromCh: change.leftFrom, toCh: change.leftTo, text: rightLine.slice(change.rightFrom, change.rightTo) };
 }

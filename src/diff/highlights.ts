@@ -4,7 +4,7 @@ import type {
 	DiffMarkDecoration,
 } from "../editor/diffHighlight";
 import { diffLinesMyers } from "./myersLineDiff";
-import { diffMyers } from "./myersDiff";
+import { wordChanges } from "./words";
 import { alignLines, isWeakLine, type AlignOp } from "./align";
 import type { DiffHunk } from "../ui/DiffView";
 import { computeHeadingAnchors, type HeadingAnchor } from "../scroll/headingAnchors";
@@ -171,15 +171,14 @@ export function computeHighlights(
 		leftDecorations.push({ line: leftLineNo, className: CHANGED_CLASS });
 		rightDecorations.push({ line: rightLineNo, className: CHANGED_CLASS });
 
-		const { left: leftRanges, right: rightRanges } = diffCharRanges(
-			leftLines[leftLineNo - 1] ?? "",
-			rightLines[rightLineNo - 1] ?? "",
-		);
-		for (const [from, to] of leftRanges) {
-			leftMarks.push({ line: leftLineNo, from, to, className: REMOVED_CHAR_CLASS });
-		}
-		for (const [from, to] of rightRanges) {
-			rightMarks.push({ line: rightLineNo, from, to, className: ADDED_CHAR_CLASS });
+		const changes = wordChanges(leftLines[leftLineNo - 1] ?? "", rightLines[rightLineNo - 1] ?? "");
+		for (const { leftFrom, leftTo, rightFrom, rightTo } of changes) {
+			if (leftTo > leftFrom) {
+				leftMarks.push({ line: leftLineNo, from: leftFrom, to: leftTo, className: REMOVED_CHAR_CLASS });
+			}
+			if (rightTo > rightFrom) {
+				rightMarks.push({ line: rightLineNo, from: rightFrom, to: rightTo, className: ADDED_CHAR_CLASS });
+			}
 		}
 	};
 
@@ -200,8 +199,12 @@ export function computeHighlights(
 			leftCount > 0 && rightCount > 0 ? "changed" : leftCount > 0 ? "removed" : "added";
 		const leftLine = leftCount > 0 ? leftStart : null;
 		const rightLine = rightCount > 0 ? rightStart : null;
+		// Paired lines, and one line replaced by one line, get word marks; other replaced
+		// lines show as removed on the left and added on the right.
+		const paired = run.paired || (leftCount === 1 && rightCount === 1);
 		hunks.push({
 			kind,
+			paired,
 			leftLine,
 			rightLine,
 			leftCount,
@@ -214,9 +217,7 @@ export function computeHighlights(
 			rightHeader: headingLabelAt(rightHeadings, Math.max(1, rightLine ?? rightStart - 1)),
 		});
 
-		// Paired lines, and one line replaced by one line, get character marks; other replaced
-		// lines show as removed on the left and added on the right.
-		if (run.paired || (leftCount === 1 && rightCount === 1)) {
+		if (paired) {
 			run.left.forEach((leftLineNo, i) => {
 				const rightLineNo = run?.right[i];
 				if (rightLineNo != null) markChangedPair(leftLineNo, rightLineNo);
@@ -306,52 +307,3 @@ function pairByPosition(region: LineEntry[]): AlignOp[] {
 	flushRun();
 	return ops;
 }
-
-function diffCharRanges(left: string, right: string) {
-	const leftChars = left.split("");
-	const rightChars = right.split("");
-
-	const edits = diffMyers(leftChars, rightChars, (a, b) => a === b);
-
-	const leftRanges: Array<[number, number]> = [];
-	const rightRanges: Array<[number, number]> = [];
-
-	let leftIndex = 0;
-	let rightIndex = 0;
-	let leftRangeStart: number | null = null;
-	let rightRangeStart: number | null = null;
-
-	const flushRanges = () => {
-		if (leftRangeStart != null && leftRangeStart !== leftIndex) {
-			leftRanges.push([leftRangeStart, leftIndex]);
-		}
-		if (rightRangeStart != null && rightRangeStart !== rightIndex) {
-			rightRanges.push([rightRangeStart, rightIndex]);
-		}
-		leftRangeStart = null;
-		rightRangeStart = null;
-	};
-
-	for (const edit of edits) {
-		switch (edit.type) {
-			case "equal":
-				flushRanges();
-				leftIndex++;
-				rightIndex++;
-				break;
-			case "delete":
-				if (leftRangeStart == null) leftRangeStart = leftIndex;
-				leftIndex++;
-				break;
-			case "insert":
-				if (rightRangeStart == null) rightRangeStart = rightIndex;
-				rightIndex++;
-				break;
-		}
-	}
-
-	flushRanges();
-
-	return { left: leftRanges, right: rightRanges };
-}
-
