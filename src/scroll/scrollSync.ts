@@ -2,6 +2,8 @@ import type { EditorView } from "@codemirror/view";
 import { EditorView as EditorViewNS } from "@codemirror/view";
 import { computeHeadingAnchors, mapLineWithAnchors, type HeadingAnchor } from "./headingAnchors";
 import type { HeadingSyntax } from "../headings/headings";
+import { mainBlock } from "../compare/alignment";
+import { gapAnchorsField } from "../editor/gaps";
 
 export interface CompareTargets {
 	leftEditorView: EditorView;
@@ -78,13 +80,46 @@ export function startScrollSync(
 			const src = source;
 			if (!src) return;
 			const dst = src === left ? right : left;
-			const top = exact
-				? src.scrollDOM.scrollTop - documentOffset(src) + documentOffset(dst)
-				: sectionTop(src, dst);
+			const top = exact ? matchedTop(src, dst) : sectionTop(src, dst);
 			const scroller = dst.scrollDOM;
 			const target = Math.max(0, Math.min(top, scroller.scrollHeight - scroller.clientHeight));
 			if (Math.abs(scroller.scrollTop - target) >= 1) scroller.scrollTop = target;
 		});
+	};
+
+	/**
+	 * Scroll position that puts the partner of the source's last matched line above the top
+	 * edge at the same height on screen (not just in the pane). Once the gaps level the matched lines this is the
+	 * same offset as the source; until then (gaps planned from estimated heights off screen)
+	 * it still brings both lines on screen, where the gaps get corrected.
+	 */
+	const matchedTop = (src: EditorView, dst: EditorView) => {
+		const offset = src.scrollDOM.scrollTop - documentOffset(src) + documentOffset(dst);
+		const srcAnchors = src.state.field(gapAnchorsField, false);
+		const dstAnchors = dst.state.field(gapAnchorsField, false);
+		if (!srcAnchors?.length || srcAnchors.length !== dstAnchors?.length) return offset;
+		const srcTop = src.scrollDOM.scrollTop - documentOffset(src);
+		const topPos = src.lineBlockAtHeight(Math.max(0, srcTop)).from;
+		let lo = 0;
+		let hi = srcAnchors.length - 1;
+		let k = -1;
+		while (lo <= hi) {
+			const mid = (lo + hi) >> 1;
+			if (srcAnchors[mid]! <= topPos) {
+				k = mid;
+				lo = mid + 1;
+			} else {
+				hi = mid - 1;
+			}
+		}
+		if (k < 0) return offset;
+		const lineTop = (view: EditorView, pos: number) =>
+			mainBlock(view.lineBlockAt(Math.min(pos, view.state.doc.length)), pos).top;
+		// Panes can start at different heights on screen (a search bar open in one of them).
+		const screenShift = src.scrollDOM.getBoundingClientRect().top - dst.scrollDOM.getBoundingClientRect().top;
+		return (
+			lineTop(dst, dstAnchors[k]!) + (srcTop - lineTop(src, srcAnchors[k]!)) + documentOffset(dst) - screenShift
+		);
 	};
 
 	const sectionTop = (src: EditorView, dst: EditorView) => {

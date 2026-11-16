@@ -23,7 +23,7 @@ export function planGaps(left: number[], right: number[]) {
 }
 
 /** The part of a line block that holds the line itself, without block widgets attached to it. */
-function mainBlock(block: BlockInfo, pos: number) {
+export function mainBlock(block: BlockInfo, pos: number) {
 	if (!Array.isArray(block.type)) return block;
 	const parts = block.type as readonly BlockInfo[];
 	return (
