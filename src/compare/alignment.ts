@@ -74,6 +74,8 @@ function sameGaps(a: Gap[], b: Gap[]) {
 export class GapAligner {
 	private views: { left: EditorView; right: EditorView } | null = null;
 	private timer: number | null = null;
+	/** Plan all gaps on the next run (new matched lines); otherwise only the ones on screen change. */
+	private replan = false;
 
 	attach(left: EditorView, right: EditorView) {
 		if (this.views?.left === left && this.views.right === right) return;
@@ -105,6 +107,7 @@ export class GapAligner {
 		if (leftStarts.length !== rightStarts.length) return;
 		left.dispatch({ effects: setGapAnchors.of(leftStarts) });
 		right.dispatch({ effects: setGapAnchors.of(rightStarts) });
+		this.replan = true;
 		this.schedule();
 	}
 
@@ -113,7 +116,12 @@ export class GapAligner {
 		if (!this.views || this.timer != null) return;
 		this.timer = window.setTimeout(() => {
 			this.timer = null;
-			this.align();
+			if (this.replan) {
+				this.replan = false;
+				this.align();
+			} else {
+				this.alignVisible();
+			}
 		}, 50);
 	}
 
@@ -148,7 +156,82 @@ export class GapAligner {
 			if (side === "left") nextLeft.push(gapBefore(leftStarts[index]!, height));
 			else nextRight.push(gapBefore(rightStarts[index]!, height));
 		}
-		if (!sameGaps(leftGaps, nextLeft)) left.dispatch({ effects: setGaps.of(nextLeft) });
-		if (!sameGaps(rightGaps, nextRight)) right.dispatch({ effects: setGaps.of(nextRight) });
+		this.apply(leftGaps, nextLeft, rightGaps, nextRight);
 	}
+
+	/**
+	 * Level the matched lines on screen from their measured tops, keeping all other gaps. Lines
+	 * off screen only have estimated heights, and re-planning them from those after every height
+	 * change never settled: the gaps flipped between two layouts and the notes shook.
+	 */
+	private alignVisible() {
+		if (!this.views) return;
+		const { left, right } = this.views;
+		const leftAnchors = left.state.field(gapAnchorsField, false) ?? [];
+		const rightAnchors = right.state.field(gapAnchorsField, false) ?? [];
+		if (leftAnchors.length !== rightAnchors.length) return;
+		const leftGaps = getGaps(left.state);
+		const rightGaps = getGaps(right.state);
+		const onScreen = (view: EditorView, pos: number) => view.viewport.from <= pos && pos <= view.viewport.to;
+		const heightAt = (gaps: Gap[], at: Gap) =>
+			gaps.find((gap) => gap.pos === at.pos && gap.side === at.side)?.height ?? 0;
+
+		const leftStarts: number[] = [];
+		const rightStarts: number[] = [];
+		const residuals: number[] = [];
+		const current: number[] = [];
+		for (let k = 0; k < leftAnchors.length; k++) {
+			const leftStart = left.state.doc.lineAt(Math.min(leftAnchors[k]!, left.state.doc.length)).from;
+			const rightStart = right.state.doc.lineAt(Math.min(rightAnchors[k]!, right.state.doc.length)).from;
+			if (!onScreen(left, leftStart) || !onScreen(right, rightStart)) continue;
+			if (isInsideWidget(left, leftStart) || isInsideWidget(right, rightStart)) continue;
+			leftStarts.push(leftStart);
+			rightStarts.push(rightStart);
+			residuals.push(
+				mainBlock(left.lineBlockAt(leftStart), leftStart).top -
+					mainBlock(right.lineBlockAt(rightStart), rightStart).top,
+			);
+			current.push(
+				heightAt(rightGaps, gapBefore(rightStart, 0)) - heightAt(leftGaps, gapBefore(leftStart, 0)),
+			);
+		}
+
+		const next = correctGaps(residuals, current);
+		if (next.every((value, k) => value === current[k])) return;
+		const keep = (gaps: Gap[], starts: number[]) => {
+			const replaced = new Set(starts.map((start) => `${gapBefore(start, 0).pos}:${gapBefore(start, 0).side}`));
+			return gaps.filter((gap) => !replaced.has(`${gap.pos}:${gap.side}`));
+		};
+		const nextLeft = keep(leftGaps, leftStarts);
+		const nextRight = keep(rightGaps, rightStarts);
+		next.forEach((net, k) => {
+			if (net < -0.5) nextLeft.push(gapBefore(leftStarts[k]!, -net));
+			else if (net > 0.5) nextRight.push(gapBefore(rightStarts[k]!, net));
+		});
+		this.apply(leftGaps, nextLeft, rightGaps, nextRight);
+	}
+
+	private apply(leftGaps: Gap[], nextLeft: Gap[], rightGaps: Gap[], nextRight: Gap[]) {
+		if (!this.views) return;
+		const byPos = (a: Gap, b: Gap) => a.pos - b.pos || a.side - b.side;
+		nextLeft.sort(byPos);
+		nextRight.sort(byPos);
+		if (!sameGaps(leftGaps, nextLeft)) this.views.left.dispatch({ effects: setGaps.of(nextLeft) });
+		if (!sameGaps(rightGaps, nextRight)) this.views.right.dispatch({ effects: setGaps.of(nextRight) });
+	}
+}
+
+/**
+ * New net gaps (right gap minus left gap) before matched lines on screen, from how far each
+ * left line sits below its right partner now (`residuals`, gaps included) and the current net
+ * gaps. A change before one line moves every later line on that side, so it is carried along.
+ */
+export function correctGaps(residuals: number[], current: number[]) {
+	let moved = 0;
+	return residuals.map((residual, k) => {
+		const need = residual - moved;
+		if (Math.abs(need) <= 0.5) return current[k]!;
+		moved += need;
+		return current[k]! + need;
+	});
 }

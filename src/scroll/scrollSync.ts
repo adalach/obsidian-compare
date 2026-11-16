@@ -45,9 +45,9 @@ export function startScrollSync(
 	rightSyntax: HeadingSyntax,
 	exact = false,
 ) {
-	let syncing = false;
+	const win = left.scrollDOM.ownerDocument.defaultView ?? window;
+	let source: EditorView | null = null;
 	let rafId: number | null = null;
-	let pending: { source: EditorView } | null = null;
 
 	// Cache anchors by doc object identity — recompute only when content changes.
 	let cachedLeftDoc: unknown = null;
@@ -70,59 +70,64 @@ export function startScrollSync(
 		return cachedAnchors;
 	};
 
-	const syncFrom = (source: EditorView) => {
-		pending = { source };
+	const scheduleSync = () => {
 		if (rafId != null) return;
 
-		rafId = window.requestAnimationFrame(() => {
+		rafId = win.requestAnimationFrame(() => {
 			rafId = null;
-			if (!pending) return;
-
-			const src = pending.source;
-			pending = null;
+			const src = source;
+			if (!src) return;
 			const dst = src === left ? right : left;
-			const leftToRight = src === left;
-
-			if (syncing) return;
-			syncing = true;
-			try {
-				if (exact) {
-					const target = src.scrollDOM.scrollTop - documentOffset(src) + documentOffset(dst);
-					if (Math.abs(dst.scrollDOM.scrollTop - target) >= 1) dst.scrollDOM.scrollTop = target;
-					return;
-				}
-				const srcTop = src.scrollDOM.scrollTop;
-				const srcBlock = src.lineBlockAtHeight(srcTop + 2);
-				const srcLine = src.state.doc.lineAt(srcBlock.from).number;
-
-				const anchors = getAnchors();
-				const dstLine = mapLineWithAnchors(
-					srcLine,
-					anchors,
-					src.state.doc.lines,
-					dst.state.doc.lines,
-					leftToRight,
-				);
-
-				const dstPos = dst.state.doc.line(dstLine).from;
-				const dstBlock = dst.lineBlockAt(dstPos);
-				dst.scrollDOM.scrollTop = dstBlock.top;
-			} finally {
-				syncing = false;
-			}
+			const top = exact
+				? src.scrollDOM.scrollTop - documentOffset(src) + documentOffset(dst)
+				: sectionTop(src, dst);
+			const scroller = dst.scrollDOM;
+			const target = Math.max(0, Math.min(top, scroller.scrollHeight - scroller.clientHeight));
+			if (Math.abs(scroller.scrollTop - target) >= 1) scroller.scrollTop = target;
 		});
 	};
 
-	const leftHandler = () => syncFrom(left);
-	const rightHandler = () => syncFrom(right);
+	const sectionTop = (src: EditorView, dst: EditorView) => {
+		const srcTop = src.scrollDOM.scrollTop - documentOffset(src);
+		const srcBlock = src.lineBlockAtHeight(srcTop + 2);
+		const srcLine = src.state.doc.lineAt(srcBlock.from).number;
+		const dstLine = mapLineWithAnchors(
+			srcLine,
+			getAnchors(),
+			src.state.doc.lines,
+			dst.state.doc.lines,
+			src === left,
+		);
+		return dst.lineBlockAt(dst.state.doc.line(dstLine).from).top + documentOffset(dst);
+	};
 
-	left.scrollDOM.addEventListener("scroll", leftHandler, { passive: true });
-	right.scrollDOM.addEventListener("scroll", rightHandler, { passive: true });
+	const inputEvents = ["wheel", "touchmove", "pointerdown", "keydown"];
+	const listen = (view: EditorView) => {
+		const scroller = view.scrollDOM;
+		const onInput = () => { source = view; };
+		const onScroll = () => {
+			// Writes to scrollTop and CodeMirror's height corrections both emit scroll events
+			// later. Keep the same source until the user interacts with the other editor.
+			source ??= view;
+			scheduleSync(); // always from the source, never back: a follower's events must not drive the source
+		};
+		for (const event of inputEvents) {
+			scroller.addEventListener(event, onInput, { capture: true, passive: true });
+		}
+		scroller.addEventListener("scroll", onScroll, { passive: true });
+		return () => {
+			for (const event of inputEvents) scroller.removeEventListener(event, onInput, true);
+			scroller.removeEventListener("scroll", onScroll);
+		};
+	};
+
+	const stopLeft = listen(left);
+	const stopRight = listen(right);
 
 	return () => {
-		left.scrollDOM.removeEventListener("scroll", leftHandler);
-		right.scrollDOM.removeEventListener("scroll", rightHandler);
-		if (rafId != null) window.cancelAnimationFrame(rafId);
+		stopLeft();
+		stopRight();
+		if (rafId != null) win.cancelAnimationFrame(rafId);
 	};
 }
 
